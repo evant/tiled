@@ -74,7 +74,7 @@ MapDocument *NewMapDialog::createMap()
     const int tileHeight = mUi->tileHeight->value();
     const int orientation = mUi->orientation->currentIndex();
 
-    Map *map = new Map((orientation == 0) ? Map::Orthogonal : Map::Isometric,
+    Map *map = new Map((Map::Orientation)(orientation + 1),
                        mapWidth, mapHeight, tileWidth, tileHeight);
 
     // Add one filling tile layer to new maps

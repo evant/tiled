@@ -26,6 +26,7 @@
 #include "addremovetileset.h"
 #include "changeproperties.h"
 #include "changetileselection.h"
+#include "hexagonalrenderer.h"
 #include "isometricrenderer.h"
 #include "layermodel.h"
 #include "map.h"
@@ -59,6 +60,9 @@ MapDocument::MapDocument(Map *map, const QString &fileName):
     switch (map->orientation()) {
     case Map::Isometric:
         mRenderer = new IsometricRenderer(map);
+        break;
+    case Map::Hexagonal:
+        mRenderer = new HexagonalRenderer(map);
         break;
     default:
         mRenderer = new OrthogonalRenderer(map);

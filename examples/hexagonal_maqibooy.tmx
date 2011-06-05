@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<map version="1.0" orientation="hexagonal" width="9" height="10" tilewidth="100" tileheight="91">
+ <properties>
+  <property name="map_prop" value="testing"/>
+ </properties>
+ <tileset firstgid="1" name="hexagon" tilewidth="100" tileheight="91">
+  <image source="hexagon.png" width="300" height="91"/>
+  <tile id="0">
+   <properties>
+    <property name="tile_prop" value="red"/>
+   </properties>
+  </tile>
+  <tile id="1">
+   <properties>
+    <property name="tile_prop" value="green"/>
+   </properties>
+  </tile>
+  <tile id="2">
+   <properties>
+    <property name="tile_prop" value="blue"/>
+   </properties>
+  </tile>
+ </tileset>
+ <layer name="background" width="9" height="10">
+  <properties>
+   <property name="layer_prop" value="background"/>
+  </properties>
+  <data encoding="base64" compression="zlib">
+   eJxjYGBgYMSDGQjIj2LiMAA+tABZ
+  </data>
+ </layer>
+ <layer name="maqibooy" width="9" height="10">
+  <properties>
+   <property name="layer_prop" value="testing"/>
+  </properties>
+  <data encoding="base64" compression="zlib">
+   eJxjYBgYwISE8alhoIIaUtTRCgAADpAAEw==
+  </data>
+ </layer>
+ <layer name="my nice looking frame" width="9" height="10">
+  <properties>
+   <property name="layer_prop" value="frame"/>
+  </properties>
+  <data encoding="base64" compression="zlib">
+   eJxjYGBgYIZiZIAsxoxFHF0MXQ82c9DNQlc3EGpgfHx+wKeXkB6YHABHTABb
+  </data>
+ </layer>
+</map>

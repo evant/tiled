@@ -28,6 +28,7 @@
 
 #include "tmxviewer.h"
 
+#include "hexagonalrenderer.h"
 #include "isometricrenderer.h"
 #include "map.h"
 #include "mapobject.h"
@@ -191,6 +192,9 @@ void TmxViewer::viewMap(const QString &fileName)
         return; // TODO: Add error handling
 
     switch (mMap->orientation()) {
+    case Map::Hexagonal:
+        mRenderer = new HexagonalRenderer(mMap);
+        break;
     case Map::Isometric:
         mRenderer = new IsometricRenderer(mMap);
         break;

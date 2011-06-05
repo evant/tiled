@@ -194,6 +194,8 @@ static Map::Orientation orientationFromString(const QStringRef &string)
         orientation = Map::Orthogonal;
     } else if (string == QLatin1String("isometric")) {
         orientation = Map::Isometric;
+    } else if (string == QLatin1String("hexagonal")) {
+        orientation = Map::Hexagonal;
     }
     return orientation;
 }
