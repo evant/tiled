@@ -173,16 +173,98 @@ static QVector<QPoint> calculateLine(int x0, int y0, int x1, int y1)
     return ret;
 }
 
+/**
+ * Returns the lists of points on a line from (x0,y0) to (x1,y1).
+ *
+ * This is an implementation of is based on the calculateLine() above
+ * but optimized line breaks to tiles that are in direct connection.
+ */
+static QVector<QPoint> calculateLineHexagonalOptimized(int x0, int y0, int x1, int y1)
+{
+    QVector<QPoint> ret;
+
+    bool steep = qAbs(y1 - y0) > qAbs(x1 - x0);
+    bool inCircleQuadrantOneOrThree = (x0<x1 && y0<y1) || (x0>x1 && y0>y1);
+    if (steep) {
+        qSwap(x0, y0);
+        qSwap(x1, y1);
+    }
+    if (x0 > x1) {
+        qSwap(x0, x1);
+        qSwap(y0, y1);
+    }
+    const int deltax = x1 - x0;
+    const int deltay = qAbs(y1 - y0);
+    int error = deltax / 2;
+    int ystep;
+    int y = y0;
+
+    if (y0 < y1)
+        ystep = 1;
+    else
+        ystep = -1;
+
+    for (int x = x0; x < x1 + 1 ; x++) {
+        if (steep)
+            ret += QPoint(y, x);
+        else
+            ret += QPoint(x, y);
+        error = error - deltay;
+
+        if (error < 0) {
+
+            // Only break/interupt on tiles that are in connection the next row...
+            if (x%2 == (int)inCircleQuadrantOneOrThree) {
+
+                if (steep && y%2 == 0)
+                    ret += QPoint(y + ystep, x);
+
+                // Some times we need to add and extra row... (angles bigger than 45 degrees)
+                if (!steep && abs(error) >= deltax) {
+                    y = y + ystep;
+                    error = error + deltax;
+
+                    ret += QPoint(x, y);
+                } else if (steep && abs(error) >= deltax) {
+                    y = y + ystep;
+                    error = error + deltax;
+
+                    if (x%2 == (int)inCircleQuadrantOneOrThree && y%2 == 0) {
+                        if (inCircleQuadrantOneOrThree)
+                            ret += QPoint(y, x + ystep);
+                        else
+                            ret += QPoint(y, x - ystep);
+                    }
+                }
+
+                y = y + ystep;
+                error = error + deltax;
+            }
+        }
+    }
+
+    return ret;
+}
+
 void StampBrush::tilePositionChanged(const QPoint &)
 {
+    Map *map = mapDocument()->map();
+
     updatePosition();
     switch (mBrushBehavior) {
     case Paint:
         doPaint(true, mStampX, mStampY);
         break;
     case LineStartSet:
-        configureBrush(calculateLine(mStampReferenceX, mStampReferenceY,
-                                     mStampX, mStampY));
+        if (map->orientation() == Map::Hexagonal) {
+            configureBrush(calculateLineHexagonalOptimized(mStampReferenceX,
+                                                           mStampReferenceY,
+                                                           mStampX,
+                                                           mStampY));
+        } else {
+            configureBrush(calculateLine(mStampReferenceX, mStampReferenceY,
+                                         mStampX, mStampY));
+        }
         break;
     case CircleMidSet:
         configureBrush(rasterEllipse(mStampReferenceX, mStampReferenceY,
