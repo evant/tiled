@@ -102,6 +102,15 @@ MapScene *DocumentManager::currentMapScene() const
     return 0;
 }
 
+MapView *DocumentManager::viewForDocument(MapDocument *mapDocument) const
+{
+    const int index = mDocuments.indexOf(mapDocument);
+    if (index == -1)
+        return 0;
+
+    return static_cast<MapView*>(mTabWidget->widget(index));
+}
+
 int DocumentManager::findDocument(const QString &fileName) const
 {
     const QString canonicalFilePath = QFileInfo(fileName).canonicalFilePath();
@@ -155,7 +164,6 @@ void DocumentManager::addDocument(MapDocument *mapDocument)
 
     scene->setMapDocument(mapDocument);
     view->setScene(scene);
-    view->centerOn(mapDocument->renderer()->tileToPixelCoords(0, 0));
 
     const int documentIndex = mDocuments.size() - 1;
 
@@ -165,6 +173,7 @@ void DocumentManager::addDocument(MapDocument *mapDocument)
     connect(mapDocument, SIGNAL(modifiedChanged()), SLOT(updateDocumentTab()));
 
     switchToDocument(documentIndex);
+    centerViewOn(0, 0);
 }
 
 void DocumentManager::closeCurrentDocument()
@@ -236,4 +245,13 @@ void DocumentManager::updateDocumentTab()
 
     mTabWidget->setTabText(index, tabText);
     mTabWidget->setTabToolTip(index, mapDocument->fileName());
+}
+
+void DocumentManager::centerViewOn(int x, int y)
+{
+    MapView *view = currentMapView();
+    if (!view)
+        return;
+
+    view->centerOn(currentDocument()->renderer()->tileToPixelCoords(x, y));
 }

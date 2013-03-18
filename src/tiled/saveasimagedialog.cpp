@@ -23,8 +23,10 @@
 
 #include "map.h"
 #include "mapdocument.h"
+#include "mapobject.h"
 #include "mapobjectitem.h"
 #include "maprenderer.h"
+#include "imagelayer.h"
 #include "objectgroup.h"
 #include "preferences.h"
 #include "tilelayer.h"
@@ -94,11 +96,19 @@ SaveAsImageDialog::SaveAsImageDialog(MapDocument *mapDocument,
     connect(mUi->browseButton, SIGNAL(clicked()), SLOT(browse()));
     connect(mUi->fileNameEdit, SIGNAL(textChanged(QString)),
             this, SLOT(updateAcceptEnabled()));
+
+    Utils::restoreGeometry(this);
 }
 
 SaveAsImageDialog::~SaveAsImageDialog()
 {
+    Utils::saveGeometry(this);
     delete mUi;
+}
+
+static bool objectLessThan(const MapObject *a, const MapObject *b)
+{
+    return a->y() < b->y();
 }
 
 void SaveAsImageDialog::accept()
@@ -126,8 +136,13 @@ void SaveAsImageDialog::accept()
     const bool drawTileGrid = mUi->drawTileGrid->isChecked();
 
     MapRenderer *renderer = mMapDocument->renderer();
-    QSize mapSize = renderer->mapSize();
 
+    // Remember the current render flags
+    const Tiled::RenderFlags renderFlags = renderer->flags();
+
+    renderer->setFlag(ShowTileObjectOutlines, false);
+
+    QSize mapSize = renderer->mapSize();
     if (useCurrentScale)
         mapSize *= mCurrentScale;
 
@@ -150,19 +165,35 @@ void SaveAsImageDialog::accept()
 
         const TileLayer *tileLayer = dynamic_cast<const TileLayer*>(layer);
         const ObjectGroup *objGroup = dynamic_cast<const ObjectGroup*>(layer);
+        const ImageLayer *imageLayer = dynamic_cast<const ImageLayer*>(layer);
 
         if (tileLayer) {
             renderer->drawTileLayer(&painter, tileLayer);
         } else if (objGroup) {
-            foreach (const MapObject *object, objGroup->objects()) {
-                const QColor color = MapObjectItem::objectColor(object);
-                renderer->drawMapObject(&painter, object, color);
+            QList<MapObject*> objects = objGroup->objects();
+
+            // Objects are always drawn top to bottom at the moment
+            qStableSort(objects.begin(), objects.end(), objectLessThan);
+
+            foreach (const MapObject *object, objects) {
+                if (object->isVisible()) {
+                    const QColor color = MapObjectItem::objectColor(object);
+                    renderer->drawMapObject(&painter, object, color);
+                }
             }
+        } else if (imageLayer) {
+            renderer->drawImageLayer(&painter, imageLayer);
         }
     }
 
-    if (drawTileGrid)
-        renderer->drawGrid(&painter, QRectF(QPointF(), renderer->mapSize()));
+    if (drawTileGrid) {
+        Preferences *prefs = Preferences::instance();
+        renderer->drawGrid(&painter, QRectF(QPointF(), renderer->mapSize()),
+                           prefs->gridColor());
+    }
+
+    // Restore the previous render flags
+    renderer->setFlags(renderFlags);
 
     image.save(fileName);
     mPath = QFileInfo(fileName).path();

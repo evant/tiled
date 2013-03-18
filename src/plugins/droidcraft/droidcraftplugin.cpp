@@ -96,7 +96,7 @@ bool DroidcraftPlugin::write(const Tiled::Map *map, const QString &fileName)
     using namespace Tiled;
 
     // Check layer count and type
-    if (map->layerCount() != 1 || !map->layerAt(0)->asTileLayer()) {
+    if (map->layerCount() != 1 || !map->layerAt(0)->isTileLayer()) {
         mError = tr("The map needs to have exactly one tile layer!");
         return false;
     }
@@ -104,7 +104,7 @@ bool DroidcraftPlugin::write(const Tiled::Map *map, const QString &fileName)
     TileLayer *mapLayer = map->layerAt(0)->asTileLayer();
 
     // Check layer size
-    if (mapLayer->width() != 48 || mapLayer->height() != 48){
+    if (mapLayer->width() != 48 || mapLayer->height() != 48) {
         mError = tr("The layer must have a size of 48 x 48 tiles!");
         return false;
     }
@@ -147,4 +147,6 @@ QString DroidcraftPlugin::errorString() const
     return mError;
 }
 
+#if QT_VERSION < 0x050000
 Q_EXPORT_PLUGIN2(Droidcraft, DroidcraftPlugin)
+#endif

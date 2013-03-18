@@ -21,6 +21,7 @@
 
 #include "varianttomapconverter.h"
 
+#include "imagelayer.h"
 #include "map.h"
 #include "mapobject.h"
 #include "objectgroup.h"
@@ -56,6 +57,13 @@ Map *VariantToMapConverter::toMap(const QVariant &variant,
                    variantMap["tileheight"].toInt());
 
     mMap->setProperties(toProperties(variantMap["properties"]));
+
+    const QString bgColor = variantMap["backgroundcolor"].toString();
+    if (!bgColor.isEmpty())
+#if QT_VERSION >= 0x040700
+        if (QColor::isValidColor(bgColor))
+#endif
+            mMap->setBackgroundColor(QColor(bgColor));
 
     foreach (const QVariant &tilesetVariant, variantMap["tilesets"].toList()) {
         Tileset *tileset = toTileset(tilesetVariant);
@@ -100,6 +108,9 @@ Tileset *VariantToMapConverter::toTileset(const QVariant &variant)
     const int tileHeight = variantMap["tileheight"].toInt();
     const int spacing = variantMap["spacing"].toInt();
     const int margin = variantMap["margin"].toInt();
+    const QVariantMap tileOffset = variantMap["tileoffset"].toMap();
+    const int tileOffsetX = tileOffset["x"].toInt();
+    const int tileOffsetY = tileOffset["y"].toInt();
 
     if (tileWidth <= 0 || tileHeight <= 0 || firstGid == 0) {
         mError = tr("Invalid tileset parameters for tileset '%1'").arg(name);
@@ -109,6 +120,7 @@ Tileset *VariantToMapConverter::toTileset(const QVariant &variant)
     Tileset *tileset = new Tileset(name,
                                    tileWidth, tileHeight,
                                    spacing, margin);
+    tileset->setTileOffset(QPoint(tileOffsetX, tileOffsetY));
 
     const QString trans = variantMap["transparentcolor"].toString();
     if (!trans.isEmpty())
@@ -141,6 +153,36 @@ Tileset *VariantToMapConverter::toTileset(const QVariant &variant)
         }
     }
 
+    // Read terrains
+    QVariantList terrainsVariantList = variantMap["terrains"].toList();
+    for (int i = 0; i < terrainsVariantList.count(); ++i) {
+        QVariantMap terrainMap = terrainsVariantList[i].toMap();
+        tileset->addTerrain(terrainMap["name"].toString(),
+                            terrainMap["tile"].toInt());
+    }
+
+    // Read tile terrain information
+    const QVariantMap tilesVariantMap = variantMap["tiles"].toMap();
+    for (it = tilesVariantMap.begin(); it != tilesVariantMap.end(); ++it) {
+        bool ok;
+        const int tileIndex = it.key().toInt();
+        Tile *tile = tileset->tileAt(tileIndex);
+        if (tileIndex >= 0 && tileIndex < tileset->tileCount()) {
+            const QVariantMap tileVar = it.value().toMap();
+            QList<QVariant> terrains = tileVar["terrain"].toList();
+            if (terrains.count() == 4) {
+                for (int i = 0; i < 4; ++i) {
+                    int terrainID = terrains.at(i).toInt(&ok);
+                    if (ok && terrainID >= 0 && terrainID < tileset->terrainCount())
+                        tile->setCornerTerrain(i, terrainID);
+                }
+            }
+            float terrainProbability = tileVar["probability"].toFloat(&ok);
+            if (ok)
+                tile->setTerrainProbability(terrainProbability);
+        }
+    }
+
     mGidMapper.insert(firstGid, tileset);
     return tileset;
 }
@@ -154,6 +196,8 @@ Layer *VariantToMapConverter::toLayer(const QVariant &variant)
         layer = toTileLayer(variantMap);
     else if (variantMap["type"] == "objectgroup")
         layer = toObjectGroup(variantMap);
+    else if (variantMap["type"] == "imagelayer")
+        layer = toImageLayer(variantMap);
 
     if (layer)
         layer->setProperties(toProperties(variantMap["properties"]));
@@ -189,7 +233,7 @@ TileLayer *VariantToMapConverter::toTileLayer(const QVariantMap &variantMap)
     bool ok;
 
     foreach (const QVariant &gidVariant, dataVariantList) {
-        const uint gid = gidVariant.toUInt(&ok);
+        const unsigned gid = gidVariant.toUInt(&ok);
         if (!ok) {
             mError = tr("Unable to parse tile at (%1,%2) on layer '%3'")
                     .arg(x).arg(y).arg(tileLayer->name());
@@ -282,6 +326,9 @@ ObjectGroup *VariantToMapConverter::toObjectGroup(const QVariantMap &variantMap)
             object->setTile(cell.tile);
         }
 
+        if (objectVariantMap.contains("visible"))
+            object->setVisible(objectVariantMap["visible"].toBool());
+
         object->setProperties(toProperties(objectVariantMap["properties"]));
         objectGroup->addObject(object);
 
@@ -296,9 +343,43 @@ ObjectGroup *VariantToMapConverter::toObjectGroup(const QVariantMap &variantMap)
             object->setShape(MapObject::Polyline);
             object->setPolygon(toPolygon(polylineVariant));
         }
+        if (objectVariantMap.contains("ellipse"))
+            object->setShape(MapObject::Ellipse);
     }
 
     return objectGroup;
+}
+
+ImageLayer *VariantToMapConverter::toImageLayer(const QVariantMap &variantMap)
+{
+    ImageLayer *imageLayer = new ImageLayer(variantMap["name"].toString(),
+                                            variantMap["x"].toInt(),
+                                            variantMap["y"].toInt(),
+                                            variantMap["width"].toInt(),
+                                            variantMap["height"].toInt());
+
+    const qreal opacity = variantMap["opacity"].toReal();
+    const bool visible = variantMap["visible"].toBool();
+
+    imageLayer->setOpacity(opacity);
+    imageLayer->setVisible(visible);
+
+    const QString trans = variantMap["transparentcolor"].toString();
+    if (!trans.isEmpty())
+#if QT_VERSION >= 0x040700
+        if (QColor::isValidColor(trans))
+#endif
+            imageLayer->setTransparentColor(QColor(trans));
+
+    const QString imageSource = variantMap["image"].toString();
+    if (!imageSource.isEmpty()) {
+        if (!imageLayer->loadFromImage(QImage(imageSource), imageSource)) {
+            // TODO: This error is currently ignored
+            mError = tr("Error loading image:\n'%1'").arg(imageSource);
+        }
+    }
+
+    return imageLayer;
 }
 
 QPolygonF VariantToMapConverter::toPolygon(const QVariant &variant) const

@@ -22,6 +22,12 @@
 #define ZOOMABLE_H
 
 #include <QObject>
+#include <QRegExp>
+#include <QVector>
+
+class QComboBox;
+class QPinchGesture;
+class QRegExpValidator;
 
 namespace Tiled {
 namespace Internal {
@@ -56,22 +62,42 @@ public:
     void handleWheelDelta(int delta);
 
     /**
+     * Changes the current scale based on the given pinch gesture.
+     */
+    void handlePinchGesture(QPinchGesture *pinch);
+
+    /**
      * Returns whether images should be smoothly transformed when drawn at the
      * current scale. This is the case when the scale is not a whole number.
      */
     bool smoothTransform() const
     { return mScale != (int) mScale; }
 
+    void setZoomFactors(const QVector<qreal>& factors);
+    void connectToComboBox(QComboBox *comboBox);
+
 public slots:
     void zoomIn();
     void zoomOut();
     void resetZoom();
 
+private slots:
+    void comboActivated(int index);
+    void comboEdited();
+
 signals:
     void scaleChanged(qreal scale);
 
 private:
+    void syncComboBox();
+
+private:
     qreal mScale;
+    qreal mGestureStartScale;
+    QVector<qreal> mZoomFactors;
+    QComboBox *mComboBox;
+    QRegExp mComboRegExp;
+    QRegExpValidator *mComboValidator;
 };
 
 } // namespace Internal

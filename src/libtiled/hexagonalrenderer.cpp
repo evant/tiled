@@ -60,7 +60,7 @@ QPainterPath HexagonalRenderer::shape(const MapObject *object) const
     return QPainterPath();
 }
 
-void HexagonalRenderer::drawGrid(QPainter *painter, const QRectF &rect) const
+void HexagonalRenderer::drawGrid(QPainter *painter, const QRectF &rect, QColor gridColor) const
 {
     const int tileWidth = map()->tileWidth();
     const int tileHeight = map()->tileHeight();
@@ -73,7 +73,6 @@ void HexagonalRenderer::drawGrid(QPainter *painter, const QRectF &rect) const
     int endX = map()->width();
     int endY = map()->height();
 
-    QColor gridColor(Qt::black);
     gridColor.setAlpha(128);
 
     QPen gridPen(gridColor);

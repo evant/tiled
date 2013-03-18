@@ -56,6 +56,7 @@ MapDocumentActionHandler::MapDocumentActionHandler(QObject *parent)
 
     mActionAddTileLayer = new QAction(this);
     mActionAddObjectGroup = new QAction(this);
+    mActionAddImageLayer = new QAction(this);
 
     mActionDuplicateLayer = new QAction(this);
     mActionDuplicateLayer->setShortcut(tr("Ctrl+Shift+D"));
@@ -67,9 +68,6 @@ MapDocumentActionHandler::MapDocumentActionHandler(QObject *parent)
     mActionRemoveLayer = new QAction(this);
     mActionRemoveLayer->setIcon(
             QIcon(QLatin1String(":/images/16x16/edit-delete.png")));
-
-    mActionRenameLayer = new QAction(this);
-    mActionRenameLayer->setShortcut(tr("F2"));
 
     mActionSelectPreviousLayer = new QAction(this);
     mActionSelectPreviousLayer->setShortcut(tr("PgUp"));
@@ -108,6 +106,7 @@ MapDocumentActionHandler::MapDocumentActionHandler(QObject *parent)
     connect(mActionAddTileLayer, SIGNAL(triggered()), SLOT(addTileLayer()));
     connect(mActionAddObjectGroup, SIGNAL(triggered()),
             SLOT(addObjectGroup()));
+    connect(mActionAddImageLayer, SIGNAL(triggered()), SLOT(addImageLayer()));
     connect(mActionDuplicateLayer, SIGNAL(triggered()),
             SLOT(duplicateLayer()));
     connect(mActionMergeLayerDown, SIGNAL(triggered()),
@@ -116,7 +115,6 @@ MapDocumentActionHandler::MapDocumentActionHandler(QObject *parent)
             SLOT(selectPreviousLayer()));
     connect(mActionSelectNextLayer, SIGNAL(triggered()),
             SLOT(selectNextLayer()));
-    connect(mActionRenameLayer, SIGNAL(triggered()), SLOT(renameLayer()));
     connect(mActionRemoveLayer, SIGNAL(triggered()), SLOT(removeLayer()));
     connect(mActionMoveLayerUp, SIGNAL(triggered()), SLOT(moveLayerUp()));
     connect(mActionMoveLayerDown, SIGNAL(triggered()), SLOT(moveLayerDown()));
@@ -136,15 +134,13 @@ void MapDocumentActionHandler::retranslateUi()
 {
     mActionSelectAll->setText(tr("Select &All"));
     mActionSelectNone->setText(tr("Select &None"));
-
     mActionCropToSelection->setText(tr("&Crop to Selection"));
-
     mActionAddTileLayer->setText(tr("Add &Tile Layer"));
     mActionAddObjectGroup->setText(tr("Add &Object Layer"));
+    mActionAddImageLayer->setText(tr("Add &Image Layer"));
     mActionDuplicateLayer->setText(tr("&Duplicate Layer"));
     mActionMergeLayerDown->setText(tr("&Merge Layer Down"));
     mActionRemoveLayer->setText(tr("&Remove Layer"));
-    mActionRenameLayer->setText(tr("Re&name Layer"));
     mActionSelectPreviousLayer->setText(tr("Select Pre&vious Layer"));
     mActionSelectNextLayer->setText(tr("Select &Next Layer"));
     mActionMoveLayerUp->setText(tr("R&aise Layer"));
@@ -235,13 +231,19 @@ void MapDocumentActionHandler::cropToSelection()
 void MapDocumentActionHandler::addTileLayer()
 {
     if (mMapDocument)
-        mMapDocument->addLayer(MapDocument::TileLayerType);
+        mMapDocument->addLayer(Layer::TileLayerType);
 }
 
 void MapDocumentActionHandler::addObjectGroup()
 {
     if (mMapDocument)
-        mMapDocument->addLayer(MapDocument::ObjectGroupType);
+        mMapDocument->addLayer(Layer::ObjectGroupType);
+}
+
+void MapDocumentActionHandler::addImageLayer()
+{
+     if (mMapDocument)
+         mMapDocument->addLayer(Layer::ImageLayerType);
 }
 
 void MapDocumentActionHandler::duplicateLayer()
@@ -292,12 +294,6 @@ void MapDocumentActionHandler::removeLayer()
         mMapDocument->removeLayer(mMapDocument->currentLayerIndex());
 }
 
-void MapDocumentActionHandler::renameLayer()
-{
-    if (mMapDocument)
-        mMapDocument->emitEditLayerNameRequested();
-}
-
 void MapDocumentActionHandler::toggleOtherLayers()
 {
     if (mMapDocument)
@@ -330,6 +326,7 @@ void MapDocumentActionHandler::updateActions()
 
     mActionAddTileLayer->setEnabled(map);
     mActionAddObjectGroup->setEnabled(map);
+    mActionAddImageLayer->setEnabled(map);
 
     const int layerCount = map ? map->layerCount() : 0;
     const bool hasPreviousLayer = currentLayerIndex >= 0
@@ -344,6 +341,5 @@ void MapDocumentActionHandler::updateActions()
     mActionMoveLayerDown->setEnabled(hasNextLayer);
     mActionToggleOtherLayers->setEnabled(layerCount > 1);
     mActionRemoveLayer->setEnabled(currentLayerIndex >= 0);
-    mActionRenameLayer->setEnabled(currentLayerIndex >= 0);
     mActionLayerProperties->setEnabled(currentLayerIndex >= 0);
 }

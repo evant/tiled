@@ -73,6 +73,7 @@ QRectF OrthogonalRenderer::boundingRect(const MapObject *object) const
     } else {
         // The -2 and +3 are to account for the pen width and shadow
         switch (object->shape()) {
+        case MapObject::Ellipse:
         case MapObject::Rectangle:
             if (rect.isNull()) {
                 boundingRect = rect.adjusted(-10 - 2, -10 - 2, 10 + 3, 10 + 3);
@@ -132,13 +133,26 @@ QPainterPath OrthogonalRenderer::shape(const MapObject *object) const
             }
             break;
         }
+        case MapObject::Ellipse: {
+            const QRectF bounds = object->bounds();
+            const QRectF rect(tileToPixelCoords(bounds.topLeft()),
+                              tileToPixelCoords(bounds.bottomRight()));
+
+            if (rect.isNull()) {
+                path.addEllipse(rect.topLeft(), 20, 20);
+            } else {
+                path.addEllipse(rect);
+            }
+            break;
+        }
         }
     }
 
     return path;
 }
 
-void OrthogonalRenderer::drawGrid(QPainter *painter, const QRectF &rect) const
+void OrthogonalRenderer::drawGrid(QPainter *painter, const QRectF &rect,
+                                  QColor gridColor) const
 {
     const int tileWidth = map()->tileWidth();
     const int tileHeight = map()->tileHeight();
@@ -153,10 +167,9 @@ void OrthogonalRenderer::drawGrid(QPainter *painter, const QRectF &rect) const
     const int endY = qMin((int) std::ceil(rect.bottom()),
                           map()->height() * tileHeight + 1);
 
-    QColor gridColor(Qt::black);
     gridColor.setAlpha(128);
 
-    QPen gridPen(gridColor);
+    QPen gridPen(gridColor, 0);
     gridPen.setDashPattern(QVector<qreal>() << 2 << 2);
 
     if (startY < endY) {
@@ -289,13 +302,16 @@ void OrthogonalRenderer::drawMapObject(QPainter *painter,
         const QPoint paintOrigin(0, -img.height());
         painter->drawPixmap(paintOrigin, img);
 
-        QPen pen(Qt::SolidLine);
-        painter->setPen(pen);
-        painter->drawRect(QRect(paintOrigin, img.size()));
-        pen.setStyle(Qt::DotLine);
-        pen.setColor(color);
-        painter->setPen(pen);
-        painter->drawRect(QRect(paintOrigin, img.size()));
+        if (testFlag(ShowTileObjectOutlines)) {
+            QPen pen(Qt::SolidLine);
+            pen.setWidth(0);
+            painter->setPen(pen);
+            painter->drawRect(QRect(paintOrigin, img.size()));
+            pen.setStyle(Qt::DotLine);
+            pen.setColor(color);
+            painter->setPen(pen);
+            painter->drawRect(QRect(paintOrigin, img.size()));
+        }
     } else {
         const QPen linePen(color, 2);
         const QPen shadowPen(Qt::black, 2);
@@ -351,6 +367,29 @@ void OrthogonalRenderer::drawMapObject(QPainter *painter,
             painter->setPen(linePen);
             painter->setBrush(fillBrush);
             painter->drawPolygon(screenPolygon);
+            break;
+        }
+
+        case MapObject::Ellipse: {
+            if (rect.isNull())
+                rect = QRectF(QPointF(-10, -10), QSizeF(20, 20));
+
+            const QFontMetrics fm = painter->fontMetrics();
+            QString name = fm.elidedText(object->name(), Qt::ElideRight,
+                                         rect.width() + 2);
+
+            // Draw the shadow
+            painter->setPen(shadowPen);
+            painter->drawEllipse(rect.translated(QPointF(1, 1)));
+            if (!name.isEmpty())
+                painter->drawText(QPoint(1, -5 + 1), name);
+
+            painter->setPen(linePen);
+            painter->setBrush(fillBrush);
+            painter->drawEllipse(rect);
+            if (!name.isEmpty())
+                painter->drawText(QPoint(0, -5), name);
+
             break;
         }
         }

@@ -23,12 +23,13 @@
 #include "ui_propertiesdialog.h"
 
 #include "changeproperties.h"
-#include "propertiesmodel.h"
-
+#include "imagelayer.h"
+#include "imagelayerpropertiesdialog.h"
+#include "mapdocument.h"
 #include "objectgroup.h"
 #include "objectgrouppropertiesdialog.h"
-
-#include "mapdocument.h"
+#include "propertiesmodel.h"
+#include "utils.h"
 
 #include <QShortcut>
 #include <QUndoStack>
@@ -68,10 +69,13 @@ PropertiesDialog::PropertiesDialog(const QString &kind,
             this, SLOT(deleteSelectedProperties()));
 
     setWindowTitle(tr("%1 Properties").arg(mKind));
+
+    Utils::restoreGeometry(this);
 }
 
 PropertiesDialog::~PropertiesDialog()
 {
+    Utils::saveGeometry(this);
     delete mUi;
 }
 
@@ -96,13 +100,16 @@ void PropertiesDialog::showDialogFor(Layer *layer,
                                      MapDocument *mapDocument,
                                      QWidget *parent)
 {
-    ObjectGroup *objectGroup = dynamic_cast<ObjectGroup*>(layer);
     PropertiesDialog *dialog;
 
-    if (objectGroup) {
+    if (ObjectGroup *objectGroup = layer->asObjectGroup()) {
         dialog = new ObjectGroupPropertiesDialog(mapDocument,
                                                  objectGroup,
                                                  parent);
+    } else if (ImageLayer *imageLayer = layer->asImageLayer()) {
+        dialog = new ImageLayerPropertiesDialog(mapDocument,
+                                                imageLayer,
+                                                parent);
     } else {
         dialog = new PropertiesDialog(tr("Layer"),
                                       layer,

@@ -39,6 +39,13 @@ class Layer;
 class Map;
 class MapObject;
 class TileLayer;
+class ImageLayer;
+
+enum RenderFlag {
+    ShowTileObjectOutlines = 0x1
+};
+
+Q_DECLARE_FLAGS(RenderFlags, RenderFlag)
 
 /**
  * This interface is used for rendering tile layers and retrieving associated
@@ -72,6 +79,12 @@ public:
     virtual QRectF boundingRect(const MapObject *object) const = 0;
 
     /**
+     * Returns the bounding rectangle in pixels of the given \a imageLayer, as
+     * it would be drawn by drawImageLayer().
+     */
+    QRectF boundingRect(const ImageLayer *imageLayer) const;
+
+    /**
      * Returns the shape in pixels of the given \a object. This is used for
      * mouse interaction and should match the rendered object as closely as
      * possible.
@@ -82,7 +95,8 @@ public:
      * Draws the tile grid in the specified \a rect using the given
      * \a painter.
      */
-    virtual void drawGrid(QPainter *painter, const QRectF &rect) const = 0;
+    virtual void drawGrid(QPainter *painter, const QRectF &rect,
+                          QColor gridColor = Qt::black) const = 0;
 
     /**
      * Draws the given \a layer using the given \a painter.
@@ -112,6 +126,13 @@ public:
                                const QColor &color) const = 0;
 
     /**
+     * Draws the given image \a layer using the given \a painter.
+     */
+    void drawImageLayer(QPainter *painter,
+                        const ImageLayer *imageLayer,
+                        const QRectF &exposed = QRectF());
+
+    /**
      * Returns the tile coordinates matching the given pixel position.
      */
     virtual QPointF pixelToTileCoords(qreal x, qreal y) const = 0;
@@ -135,6 +156,13 @@ public:
         return screenPolygon;
     }
 
+    void setFlag(RenderFlag flag, bool enabled = true);
+    bool testFlag(RenderFlag flag) const
+    { return mFlags.testFlag(flag); }
+
+    RenderFlags flags() const { return mFlags; }
+    void setFlags(RenderFlags flags) { mFlags = flags; }
+
     static QPolygonF lineToPolygon(const QPointF &start, const QPointF &end);
 
 protected:
@@ -145,8 +173,12 @@ protected:
 
 private:
     const Map *mMap;
+
+    RenderFlags mFlags;
 };
 
 } // namespace Tiled
+
+Q_DECLARE_OPERATORS_FOR_FLAGS(Tiled::RenderFlags)
 
 #endif // MAPRENDERER_H

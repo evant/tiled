@@ -28,6 +28,8 @@
 #include <QRegion>
 #include <QString>
 
+#include "layer.h"
+
 class QPoint;
 class QRect;
 class QSize;
@@ -35,15 +37,18 @@ class QUndoStack;
 
 namespace Tiled {
 
-class Layer;
 class Map;
 class MapObject;
 class MapRenderer;
+class Terrain;
+class Tile;
 class Tileset;
 
 namespace Internal {
 
 class LayerModel;
+class MapObjectModel;
+class TerrainModel;
 class TileSelectionModel;
 
 /**
@@ -83,13 +88,18 @@ public:
      * file was saved successfully. If not, <i>error</i> will be set to the
      * error message if it is not 0.
      *
-     * If the save was succesful, the file name of this document will be set
+     * If the save was successful, the file name of this document will be set
      * to \a fileName.
+     *
+     * The map format will be the same as this map was opened with.
      */
     bool save(const QString &fileName, QString *error = 0);
 
     QString fileName() const { return mFileName; }
-    void setFileName(const QString &fileName);
+
+    QString writerPluginFileName() const { return mWriterPluginFileName; }
+    void setWriterPluginFileName(const QString &writerPluginFileName)
+    { mWriterPluginFileName = writerPluginFileName; }
 
     QString displayName() const;
 
@@ -133,11 +143,8 @@ public:
                    const QRect &bounds,
                    bool wrapX, bool wrapY);
 
-    enum LayerType {
-        TileLayerType,
-        ObjectGroupType
-    };
-    void addLayer(LayerType layerType);
+
+    void addLayer(Layer::Type layerType);
     void duplicateLayer();
     void mergeLayerDown();
     void moveLayerUp(int index);
@@ -156,6 +163,10 @@ public:
      * map, and to display the layer stack in a view.
      */
     LayerModel *layerModel() const { return mLayerModel; }
+
+    MapObjectModel *mapObjectModel() const { return mMapObjectModel; }
+
+    TerrainModel *terrainModel() const { return mTerrainModel; }
 
     /**
      * Returns the map renderer.
@@ -218,18 +229,11 @@ public:
      */
     void emitRegionEdited(const QRegion &region, Layer *layer);
 
-    void emitObjectsAdded(const QList<MapObject*> &objects);
-    void emitObjectsRemoved(const QList<MapObject*> &objects);
-    void emitObjectsChanged(const QList<MapObject*> &objects);
-
-    inline void emitObjectAdded(MapObject *object)
-    { emitObjectsAdded(QList<MapObject*>() << object); }
-
-    inline void emitObjectRemoved(MapObject *object)
-    { emitObjectsRemoved(QList<MapObject*>() << object); }
-
-    inline void emitObjectChanged(MapObject *object)
-    { emitObjectsChanged(QList<MapObject*>() << object); }
+    /**
+     * Emits the signal notifying tileset models about changes to tile terrain
+     * information. All the \a tiles need to be from the same tileset.
+     */
+    void emitTileTerrainChanged(const QList<Tile*> &tiles);
 
     /**
      * Emits the editLayerNameRequested signal, to get renamed.
@@ -259,6 +263,8 @@ signals:
     void mapChanged();
 
     void layerAdded(int index);
+    void layerAboutToBeRemoved(int index);
+    void layerRenamed(int index);
     void layerRemoved(int index);
     void layerChanged(int index);
 
@@ -286,31 +292,54 @@ signals:
      */
     void regionEdited(const QRegion &region, Layer *layer);
 
+    /**
+     * Emitted when the terrain information for the given list of tiles was
+     * changed. All the tiles are guaranteed to be from the same tileset.
+     */
+    void tileTerrainChanged(const QList<Tile*> &tiles);
+
+    void tilesetAboutToBeAdded(int index);
     void tilesetAdded(int index, Tileset *tileset);
+    void tilesetAboutToBeRemoved(int index);
     void tilesetRemoved(Tileset *tileset);
     void tilesetMoved(int from, int to);
     void tilesetFileNameChanged(Tileset *tileset);
     void tilesetNameChanged(Tileset *tileset);
 
     void objectsAdded(const QList<MapObject*> &objects);
+    void objectsAboutToBeRemoved(const QList<MapObject*> &objects);
     void objectsRemoved(const QList<MapObject*> &objects);
     void objectsChanged(const QList<MapObject*> &objects);
 
 private slots:
+    void onObjectsRemoved(const QList<MapObject*> &objects);
+
     void onLayerAdded(int index);
     void onLayerAboutToBeRemoved(int index);
     void onLayerRemoved(int index);
 
 private:
+    void setFileName(const QString &fileName);
     void deselectObjects(const QList<MapObject*> &objects);
 
     QString mFileName;
+
+    /*
+     * The filename of a plugin is unique. So it can be used to determine
+     * the right plugin to be used for saving the map again.
+     * The nameFilter of a plugin can not be used, since it's translatable.
+     * The filename of a plugin must not change while maps are open using this
+     * plugin.
+     */
+    QString mWriterPluginFileName;
     Map *mMap;
     LayerModel *mLayerModel;
     QRegion mTileSelection;
     QList<MapObject*> mSelectedObjects;
     MapRenderer *mRenderer;
     int mCurrentLayerIndex;
+    MapObjectModel *mMapObjectModel;
+    TerrainModel *mTerrainModel;
     QUndoStack *mUndoStack;
 };
 

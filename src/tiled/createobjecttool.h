@@ -37,10 +37,11 @@ class CreateObjectTool : public AbstractObjectTool
 
 public:
     enum CreationMode {
-        CreateArea,
+        CreateRectangle,
         CreateTile,
         CreatePolygon,
-        CreatePolyline
+        CreatePolyline,
+        CreateEllipse
     };
 
     CreateObjectTool(CreationMode mode, QObject *parent = 0);

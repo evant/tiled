@@ -28,6 +28,7 @@ LuaTableWriter::LuaTableWriter(QIODevice *device)
     : m_device(device)
     , m_indent(0)
     , m_valueSeparator(',')
+    , m_suppressNewlines(false)
     , m_newLine(true)
     , m_valueWritten(false)
     , m_error(false)
@@ -186,7 +187,7 @@ void LuaTableWriter::writeNewline()
     }
 }
 
-void LuaTableWriter::write(const char *bytes, uint length)
+void LuaTableWriter::write(const char *bytes, unsigned length)
 {
     if (m_device->write(bytes, length) != length)
         m_error = true;

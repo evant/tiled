@@ -30,6 +30,7 @@
 
 #include "objectgroup.h"
 
+#include "layer.h"
 #include "map.h"
 #include "mapobject.h"
 #include "tile.h"
@@ -38,13 +39,13 @@
 using namespace Tiled;
 
 ObjectGroup::ObjectGroup()
-    : Layer(QString(), 0, 0, 0, 0)
+    : Layer(ObjectGroupType, QString(), 0, 0, 0, 0)
 {
 }
 
 ObjectGroup::ObjectGroup(const QString &name,
                          int x, int y, int width, int height)
-    : Layer(name, x, y, width, height)
+    : Layer(ObjectGroupType, name, x, y, width, height)
 {
 }
 
@@ -75,12 +76,23 @@ int ObjectGroup::removeObject(MapObject *object)
     return index;
 }
 
+void ObjectGroup::removeObjectAt(int index)
+{
+    MapObject *object = mObjects.takeAt(index);
+    object->setObjectGroup(0);
+}
+
 QRectF ObjectGroup::objectsBoundingRect() const
 {
     QRectF boundingRect;
     foreach (const MapObject *object, mObjects)
         boundingRect = boundingRect.united(object->bounds());
     return boundingRect;
+}
+
+bool ObjectGroup::isEmpty() const
+{
+    return mObjects.isEmpty();
 }
 
 QSet<Tileset*> ObjectGroup::usedTilesets() const

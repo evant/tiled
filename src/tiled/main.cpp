@@ -23,11 +23,14 @@
 #include "commandlineparser.h"
 #include "mainwindow.h"
 #include "languagemanager.h"
+#include "pluginmanager.h"
 #include "preferences.h"
 #include "tiledapplication.h"
 
 #include <QDebug>
 #include <QtPlugin>
+#include <QStyle>
+#include <QStyleFactory>
 
 #ifdef STATIC_BUILD
 Q_IMPORT_PLUGIN(qgif)
@@ -85,8 +88,7 @@ CommandLineHandler::CommandLineHandler()
     option<&CommandLineHandler::justQuit>(
                 QChar(),
                 QLatin1String("--quit"),
-                QLatin1String("Only check validity of arguments, "
-                              "don't actually load any files"));
+                QLatin1String("Only check validity of arguments"));
 
     option<&CommandLineHandler::setDisableOpenGL>(
                 QChar(),
@@ -98,7 +100,7 @@ void CommandLineHandler::showVersion()
 {
     if (!showedVersion) {
         showedVersion = true;
-        qWarning() << "Tiled (Qt) Map Editor"
+        qWarning() << qPrintable(QApplication::applicationName())
                    << qPrintable(QApplication::applicationVersion());
         quit = true;
     }
@@ -133,11 +135,29 @@ int main(int argc, char *argv[])
 #ifdef BUILD_INFO_VERSION
     a.setApplicationVersion(QLatin1String(AS_STRING(BUILD_INFO_VERSION)));
 #else
-    a.setApplicationVersion(QLatin1String("0.8.1"));
+    a.setApplicationVersion(QLatin1String("0.9.0"));
 #endif
 
 #ifdef Q_WS_MAC
     a.setAttribute(Qt::AA_DontShowIconsInMenus);
+#endif
+
+#ifndef Q_OS_WIN
+    QString baseName = QApplication::style()->objectName();
+    if (baseName == QLatin1String("windows")) {
+        // Avoid Windows 95 style at all cost
+        if (QStyleFactory::keys().contains(QLatin1String("Fusion"))) {
+            baseName = QLatin1String("fusion"); // Qt5
+        } else { // Qt4
+            // e.g. if we are running on a KDE4 desktop
+            QByteArray desktopEnvironment = qgetenv("DESKTOP_SESSION");
+            if (desktopEnvironment == "kde")
+                baseName = QLatin1String("plastique");
+            else
+                baseName = QLatin1String("cleanlooks");
+        }
+        a.setStyle(QStyleFactory::create(baseName));
+    }
 #endif
 
     LanguageManager *languageManager = LanguageManager::instance();
@@ -151,6 +171,8 @@ int main(int argc, char *argv[])
         return 0;
     if (commandLine.disableOpenGL)
         Preferences::instance()->setUseOpenGL(false);
+
+    PluginManager::instance()->loadPlugins();
 
     MainWindow w;
     w.show();

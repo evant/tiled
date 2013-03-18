@@ -1,6 +1,6 @@
 /*
  * tile.h
- * Copyright 2008-2009, Thorbjørn Lindeijer <thorbjorn@lindeijer.nl>
+ * Copyright 2008-2012, Thorbjørn Lindeijer <thorbjorn@lindeijer.nl>
  * Copyright 2009, Edward Hutchins <eah1@yahoo.com>
  *
  * This file is part of libtiled.
@@ -36,7 +36,18 @@
 
 namespace Tiled {
 
+class Terrain;
 class Tileset;
+
+/**
+ * Returns the given \a terrain with the \a corner modified to \a terrainId.
+ */
+inline unsigned setTerrainCorner(unsigned terrain, int corner, int terrainId)
+{
+    unsigned mask = 0xFF << (3 - corner) * 8;
+    unsigned insert = terrainId << (3 - corner) * 8;
+    return (terrain & ~mask) | (insert & mask);
+}
 
 class TILEDSHARED_EXPORT Tile : public Object
 {
@@ -44,7 +55,9 @@ public:
     Tile(const QPixmap &image, int id, Tileset *tileset):
         mId(id),
         mTileset(tileset),
-        mImage(image)
+        mImage(image),
+        mTerrain(-1),
+        mTerrainProbability(-1.f)
     {}
 
     /**
@@ -82,10 +95,48 @@ public:
      */
     QSize size() const { return mImage.size(); }
 
+    /**
+     * Returns the Terrain of a given corner.
+     */
+    Terrain *terrainAtCorner(int corner) const;
+
+    /**
+     * Returns the terrain id at a given corner.
+     */
+    int cornerTerrainId(int corner) const { unsigned t = (terrain() >> (3 - corner)*8) & 0xFF; return t == 0xFF ? -1 : (int)t; }
+
+    /**
+     * Set the terrain type of a given corner.
+     */
+    void setCornerTerrain(int corner, int terrainId)
+    { setTerrain(setTerrainCorner(mTerrain, corner, terrainId)); }
+
+    /**
+     * Returns the terrain for each corner of this tile.
+     */
+    unsigned terrain() const { return mTerrain; }
+
+    /**
+     * Set the terrain for each corner of the tile.
+     */
+    void setTerrain(unsigned terrain);
+
+    /**
+     * Returns the probability of this terrain type appearing while painting (0-100%).
+     */
+    float terrainProbability() const { return mTerrainProbability; }
+
+    /**
+     * Set the probability of this terrain type appearing while painting (0-100%).
+     */
+    void setTerrainProbability(float probability) { mTerrainProbability = probability; }
+
 private:
     int mId;
     Tileset *mTileset;
     QPixmap mImage;
+    unsigned mTerrain;
+    float mTerrainProbability;
 };
 
 } // namespace Tiled

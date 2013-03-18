@@ -28,6 +28,7 @@
 #include "mapscene.h"
 #include "objectgroup.h"
 #include "objectgroupitem.h"
+#include "objectpropertiesdialog.h"
 #include "preferences.h"
 #include "resizemapobject.h"
 
@@ -226,6 +227,8 @@ void MapObjectItem::syncWithMapObject()
     }
 
     mSyncing = false;
+
+    setVisible(mObject->isVisible());
 }
 
 void MapObjectItem::setEditable(bool editable)
@@ -274,6 +277,7 @@ void MapObjectItem::paint(QPainter *painter,
         QLineF bottom(mBoundingRect.bottomLeft(), mBoundingRect.bottomRight());
 
         QPen dashPen(Qt::DashLine);
+        dashPen.setWidth(0);
         dashPen.setDashOffset(qMax(qreal(0), x()));
         painter->setPen(dashPen);
         painter->drawLines(QVector<QLineF>() << top << bottom);
@@ -321,4 +325,16 @@ QColor MapObjectItem::objectColor(const MapObject *object)
 
     // Fallback color
     return Qt::gray;
+}
+
+void MapObjectItem::mouseDoubleClickEvent(QGraphicsSceneMouseEvent *event)
+{
+    if (!mIsEditable) {
+        event->ignore();
+        return;
+    }
+
+    ObjectPropertiesDialog propertiesDialog(mMapDocument, mObject,
+                                            event->widget());
+    propertiesDialog.exec();
 }

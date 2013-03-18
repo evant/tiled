@@ -73,7 +73,7 @@ public:
     bool setData(const QModelIndex &index, const QVariant &value, int role);
 
     /**
-     * Makes sure the items are checkable.
+     * Makes sure the items are checkable and names editable.
      */
     Qt::ItemFlags flags(const QModelIndex &index) const;
 
@@ -118,6 +118,16 @@ public:
     Layer *takeLayerAt(int index);
 
     /**
+     * Sets whether the layer at the given index is visible.
+     */
+    void setLayerVisible(int layerIndex, bool visible);
+
+    /**
+     * Sets the opacity of the layer at the given index.
+     */
+    void setLayerOpacity(int layerIndex, float opacity);
+
+    /**
      * Renames the layer at the given index.
      */
     void renameLayer(int index, const QString &name);
@@ -143,6 +153,7 @@ private:
 
     QIcon mTileLayerIcon;
     QIcon mObjectGroupIcon;
+    QIcon mImageLayerIcon;
 };
 
 } // namespace Internal

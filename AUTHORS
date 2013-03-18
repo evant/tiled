@@ -12,11 +12,13 @@ Jeff Bland        (added Offset Map feature, fill tool and running commands)
 Michael Woerister (improvements to the object properties dialog)
 Roderic Morris    (added many icons and initial object group support)
 Stefan Beller     (added the automap feature, quick stamps, lines/circles
-                   support for multiple maps, random stamps)
+                   support for multiple maps, random mode for stamp tool and
+                   bucketfill tool)
+Alexander Kuhrt <alex@qrt.de>
 
 Translators:
 
-Alexander Komarnitsky    (Russian)
+Alex Vega                (Russian)
 Antonio Ricci            (Italian)
 Gornova                  (Italian)
 Bin Wu                   (Chinese)
@@ -27,6 +29,7 @@ Porfírio Ribeiro         (Portuguese)
 Jānis Kiršteins          (Latvian)
 Jonatas de Moraes Junior (Brazilian Portuguese)
 jurkan                   (German)
+Sébastien Burillard      (French)
 seeseekey                (German)
 Tamir Atias (KonoM)      (Hebrew)
 Thorbjørn Lindeijer      (Dutch)
@@ -44,9 +47,13 @@ See http://p.yusukekamiyamane.com/
 The dice icon is based on an SVG by Steaphan Greene that I found on Wikipedia:
 http://en.wikipedia.org/wiki/File:2-Dice-Icon.svg
 
+The rename icon for tilesets is a strong modified version of the
+'new Tileset' icon by Stefan Beller (GPL, CC-BY-SA3)
+
 Tilesets:
 
 perspective_walls.png - (C) Clint Bellanger, released as Public Domain
 isometric_grass_and_water.png - (C) Clint Bellanger, released as GPL2, GPL3, CC-BY-SA3
 tmw_desert_spacing.png - (C) The Mana World Development Team, GPL
 sewer_tileset.png - (C) Blues Brothers RPG developers, GPL
+Replica Island - (C) Chris Pruett and Genki Mine, Apache (except hotspots.png)

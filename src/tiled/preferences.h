@@ -22,8 +22,9 @@
 #define PREFERENCES_H
 
 #include <QObject>
+#include <QColor>
 
-#include "mapwriter.h"
+#include "map.h"
 #include "objecttypes.h"
 
 class QSettings;
@@ -44,12 +45,15 @@ public:
     static void deleteInstance();
 
     bool showGrid() const { return mShowGrid; }
+    bool showTileObjectOutlines() const { return mShowTileObjectOutlines; }
     bool snapToGrid() const { return mSnapToGrid; }
+    QColor gridColor() const { return mGridColor; }
+
     bool highlightCurrentLayer() const { return mHighlightCurrentLayer; }
     bool showTilesetGrid() const { return mShowTilesetGrid; }
 
-    MapWriter::LayerDataFormat layerDataFormat() const;
-    void setLayerDataFormat(MapWriter::LayerDataFormat layerDataFormat);
+    Map::LayerDataFormat layerDataFormat() const;
+    void setLayerDataFormat(Map::LayerDataFormat layerDataFormat);
 
     bool dtdEnabled() const;
     void setDtdEnabled(bool enabled);
@@ -67,11 +71,19 @@ public:
     void setObjectTypes(const ObjectTypes &objectTypes);
 
     enum FileType {
-        ObjectTypesFile
+        ObjectTypesFile,
+        ImageFile,
+        ExportedFile
     };
 
     QString lastPath(FileType fileType) const;
     void setLastPath(FileType fileType, const QString &path);
+
+    bool automappingDrawing() const { return mAutoMapDrawing; }
+    void setAutomappingDrawing(bool enabled);
+
+    QString mapsDirectory() const;
+    void setMapsDirectory(const QString &path);
 
     /**
      * Provides access to the QSettings instance to allow storing/retrieving
@@ -81,13 +93,17 @@ public:
 
 public slots:
     void setShowGrid(bool showGrid);
+    void setShowTileObjectOutlines(bool enabled);
     void setSnapToGrid(bool snapToGrid);
+    void setGridColor(QColor gridColor);
     void setHighlightCurrentLayer(bool highlight);
     void setShowTilesetGrid(bool showTilesetGrid);
 
 signals:
     void showGridChanged(bool showGrid);
+    void showTileObjectOutlinesChanged(bool enabled);
     void snapToGridChanged(bool snapToGrid);
+    void gridColorChanged(QColor gridColor);
     void highlightCurrentLayerChanged(bool highlight);
     void showTilesetGridChanged(bool showTilesetGrid);
 
@@ -95,23 +111,35 @@ signals:
 
     void objectTypesChanged();
 
+    void mapsDirectoryChanged();
+
 private:
     Preferences();
     ~Preferences();
 
+    bool boolValue(const char *key, bool def = false) const;
+    QColor colorValue(const char *key, const QColor &def = QColor()) const;
+    QString stringValue(const char *key, const QString &def = QString()) const;
+
     QSettings *mSettings;
 
     bool mShowGrid;
+    bool mShowTileObjectOutlines;
     bool mSnapToGrid;
+    QColor mGridColor;
     bool mHighlightCurrentLayer;
     bool mShowTilesetGrid;
 
-    MapWriter::LayerDataFormat mLayerDataFormat;
+    Map::LayerDataFormat mLayerDataFormat;
     bool mDtdEnabled;
     QString mLanguage;
     bool mReloadTilesetsOnChange;
     bool mUseOpenGL;
     ObjectTypes mObjectTypes;
+
+    bool mAutoMapDrawing;
+
+    QString mMapsDirectory;
 
     static Preferences *mInstance;
 };

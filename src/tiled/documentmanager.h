@@ -83,6 +83,12 @@ public:
     MapScene *currentMapScene() const;
 
     /**
+     * Returns the map view that displays the given document, or 0 when there
+     * is none.
+     */
+    MapView *viewForDocument(MapDocument *mapDocument) const;
+
+    /**
      * Returns the number of map documents.
      */
     int documentCount() const { return mDocuments.size(); }
@@ -118,6 +124,11 @@ public:
      * Returns all open map documents.
      */
     QList<MapDocument*> documents() const { return mDocuments; }
+
+    /**
+     * Centers the current map on the tile coordinates \a x, \a y.
+     */
+    void centerViewOn(int x, int y);
 
 signals:
     /**

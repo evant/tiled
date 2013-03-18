@@ -31,6 +31,7 @@
 #include "map.h"
 
 #include "layer.h"
+#include "objectgroup.h"
 #include "tile.h"
 #include "tilelayer.h"
 #include "tileset.h"
@@ -43,7 +44,8 @@ Map::Map(Orientation orientation,
     mWidth(width),
     mHeight(height),
     mTileWidth(tileWidth),
-    mTileHeight(tileHeight)
+    mTileHeight(tileHeight),
+    mLayerDataFormat(Default)
 {
 }
 
@@ -73,22 +75,40 @@ void Map::adjustDrawMargins(const QMargins &margins)
                               mDrawMargins);
 }
 
-int Map::tileLayerCount() const
+int Map::layerCount(Layer::Type type) const
 {
     int count = 0;
     foreach (Layer *layer, mLayers)
-       if (layer->asTileLayer())
+       if (layer->type() == type)
            count++;
     return count;
 }
 
-int Map::objectGroupCount() const
+QList<Layer*> Map::layers(Layer::Type type) const
 {
-    int count = 0;
+    QList<Layer*> layers;
     foreach (Layer *layer, mLayers)
-        if (layer->asObjectGroup())
-           count++;
-    return count;
+        if (layer->type() == type)
+            layers.append(layer);
+    return layers;
+}
+
+QList<ObjectGroup*> Map::objectGroups() const
+{
+    QList<ObjectGroup*> layers;
+    foreach (Layer *layer, mLayers)
+        if (ObjectGroup *og = layer->asObjectGroup())
+            layers.append(og);
+    return layers;
+}
+
+QList<TileLayer*> Map::tileLayers() const
+{
+    QList<TileLayer*> layers;
+    foreach (Layer *layer, mLayers)
+        if (TileLayer *tl = layer->asTileLayer())
+            layers.append(tl);
+    return layers;
 }
 
 void Map::addLayer(Layer *layer)
@@ -97,10 +117,11 @@ void Map::addLayer(Layer *layer)
     mLayers.append(layer);
 }
 
-int Map::indexOfLayer(const QString &layerName) const
+int Map::indexOfLayer(const QString &layerName, unsigned layertypes) const
 {
     for (int index = 0; index < mLayers.size(); index++)
-        if (layerAt(index)->name() == layerName)
+        if (layerAt(index)->name() == layerName
+                && (layertypes & layerAt(index)->type()))
             return index;
 
     return -1;
@@ -192,6 +213,12 @@ QString Tiled::orientationToString(Map::Orientation orientation)
     case Map::Isometric:
         return QLatin1String("isometric");
         break;
+    case Map::Staggered:
+        return QLatin1String("staggered");
+        break;
+    case Map::Hexagonal:
+        return QLatin1String("hexagonal");
+        break;
     }
 }
 
@@ -202,6 +229,17 @@ Map::Orientation Tiled::orientationFromString(const QString &string)
         orientation = Map::Orthogonal;
     } else if (string == QLatin1String("isometric")) {
         orientation = Map::Isometric;
+    } else if (string == QLatin1String("staggered")) {
+        orientation = Map::Staggered;
+    } else if (string == QLatin1String("hexagonal")) {
+        orientation = Map::Hexagonal;
     }
     return orientation;
+}
+
+Map *Map::fromLayer(Layer *layer)
+{
+    Map *result = new Map(Unknown, layer->width(), layer->height(), 0, 0);
+    result->addLayer(layer);
+    return result;
 }

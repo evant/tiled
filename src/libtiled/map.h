@@ -31,15 +31,16 @@
 #ifndef MAP_H
 #define MAP_H
 
+#include "layer.h"
 #include "object.h"
 
+#include <QColor>
 #include <QList>
 #include <QMargins>
 #include <QSize>
 
 namespace Tiled {
 
-class Layer;
 class Tile;
 class Tileset;
 class ObjectGroup;
@@ -60,13 +61,27 @@ public:
      * aligned on an isometric projected grid. A Hexagonal map uses hexagon
      * shaped tiles that fit into each other by shifting every other row.
      *
-     * Only Orthogonal and Isometric maps are supported by this version of
-     * Tiled.
+     * Only Orthogonal, Isometric and Staggered maps are supported by this
+     * version of Tiled.
      */
     enum Orientation {
         Unknown,
         Orthogonal,
-        Isometric
+        Isometric,
+        Staggered,
+        Hexagonal
+    };
+
+    /**
+     * The different formats in which the tile layer data can be stored.
+     */
+    enum LayerDataFormat {
+        Default    = -1,
+        XML        = 0,
+        Base64     = 1,
+        Base64Gzip = 2,
+        Base64Zlib = 3,
+        CSV        = 4
     };
 
     /**
@@ -123,9 +138,19 @@ public:
     int tileWidth() const { return mTileWidth; }
 
     /**
+     * Sets the width of one tile.
+     */
+    void setTileWidth(int width) { mTileWidth = width; }
+
+    /**
      * Returns the tile height used by this map.
      */
     int tileHeight() const { return mTileHeight; }
+
+    /**
+     * Sets the height of one tile.
+     */
+    void setTileHeight(int height) { mTileHeight = height; }
 
     /**
      * Adjusts the draw margins to be at least as big as the given margins.
@@ -149,15 +174,18 @@ public:
 
     /**
      * Convenience function that returns the number of layers of this map that
-     * are tile layers.
+     * match the given \a type.
      */
-    int tileLayerCount() const;
+    int layerCount(Layer::Type type) const;
 
-    /**
-     * Convenience function that returns the number of layers of this map that
-     * are object groups.
-     */
-    int objectGroupCount() const;
+    int tileLayerCount() const
+    { return layerCount(Layer::TileLayerType); }
+
+    int objectGroupCount() const
+    { return layerCount(Layer::ObjectGroupType); }
+
+    int imageLayerCount() const
+    { return layerCount(Layer::ImageLayerType); }
 
     /**
      * Returns the layer at the specified index.
@@ -171,6 +199,10 @@ public:
      */
     const QList<Layer*> &layers() const { return mLayers; }
 
+    QList<Layer*> layers(Layer::Type type) const;
+    QList<ObjectGroup*> objectGroups() const;
+    QList<TileLayer*> tileLayers() const;
+
     /**
      * Adds a layer to this map.
      */
@@ -179,8 +211,12 @@ public:
     /**
      * Returns the index of the layer given by \a layerName, or -1 if no
      * layer with that name is found.
+     *
+     * The second optional parameter specifies the layer types which are
+     * searched.
      */
-    int indexOfLayer(const QString &layerName) const;
+    int indexOfLayer(const QString &layerName,
+                     unsigned layerTypes = Layer::AnyLayerType) const;
 
     /**
      * Adds a layer to this map, inserting it at the given index.
@@ -231,9 +267,29 @@ public:
     void replaceTileset(Tileset *oldTileset, Tileset *newTileset);
 
     /**
+     * Returns the number of tilesets of this map.
+     */
+    int tilesetCount() const { return mTilesets.size(); }
+
+    /**
+     * Returns the tileset at the given index.
+     */
+    Tileset *tilesetAt(int index) const { return mTilesets.at(index); }
+
+    /**
      * Returns the tilesets that the tiles on this map are using.
      */
     const QList<Tileset*> &tilesets() const { return mTilesets; }
+
+    /**
+     * Returns the background color of this map.
+     */
+    const QColor &backgroundColor() const { return mBackgroundColor; }
+
+    /**
+     * Sets the background color of this map.
+     */
+    void setBackgroundColor(QColor color) { mBackgroundColor = color; }
 
     /**
      * Returns whether the given \a tileset is used by any tile layer of this
@@ -243,6 +299,21 @@ public:
 
     Map *clone() const;
 
+    /**
+     * Creates a new map that contains the given \a layer. The map size will be
+     * determined by the size of the layer.
+     *
+     * The orientation defaults to Unknown and the tile width and height will
+     * default to 0. In case this map needs to be rendered, these properties
+     * will need to be properly set.
+     */
+    static Map *fromLayer(Layer *layer);
+
+    LayerDataFormat layerDataFormat() const
+    { return mLayerDataFormat; }
+    void setLayerDataFormat(LayerDataFormat format)
+    { mLayerDataFormat = format; }
+
 private:
     void adoptLayer(Layer *layer);
 
@@ -251,9 +322,11 @@ private:
     int mHeight;
     int mTileWidth;
     int mTileHeight;
+    QColor mBackgroundColor;
     QMargins mDrawMargins;
     QList<Layer*> mLayers;
     QList<Tileset*> mTilesets;
+    LayerDataFormat mLayerDataFormat;
 };
 
 /**

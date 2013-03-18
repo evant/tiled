@@ -21,7 +21,7 @@
 #ifndef PREFERENCESDIALOG_H
 #define PREFERENCESDIALOG_H
 
-#include "mapwriter.h"
+#include "map.h"
 
 #include <QDialog>
 
@@ -54,6 +54,7 @@ protected:
 private slots:
     void languageSelected(int index);
     void useOpenGLToggled(bool useOpenGL);
+    void useAutomappingDrawingToggled(bool enabled);
 
     void addObjectType();
     void selectedObjectTypesChanged();
@@ -67,7 +68,7 @@ private:
     void fromPreferences();
     void toPreferences();
 
-    MapWriter::LayerDataFormat layerDataFormat() const;
+    Map::LayerDataFormat layerDataFormat() const;
 
     Ui::PreferencesDialog *mUi;
     QStringList mLanguages;

@@ -20,6 +20,11 @@
 
 #include "zoomable.h"
 
+#include <QComboBox>
+#include <QLineEdit>
+#include <QPinchGesture>
+#include <QValidator>
+
 #include <cmath>
 
 using namespace Tiled::Internal;
@@ -39,10 +44,23 @@ static const qreal zoomFactors[] = {
 };
 const int zoomFactorCount = sizeof(zoomFactors) / sizeof(zoomFactors[0]);
 
+
+static QString scaleToString(qreal scale)
+{
+    return QString(QLatin1String("%1 %")).arg(int(scale * 100));
+}
+
+
 Zoomable::Zoomable(QObject *parent)
     : QObject(parent)
     , mScale(1)
+    , mGestureStartScale(0)
+    , mComboBox(0)
+    , mComboRegExp(QLatin1String("^\\s*(\\d+)\\s*%?\\s*$"))
+    , mComboValidator(0)
 {
+    for (int i = 0; i < zoomFactorCount; i++)
+        mZoomFactors << zoomFactors[i];
 }
 
 void Zoomable::setScale(qreal scale)
@@ -51,17 +69,20 @@ void Zoomable::setScale(qreal scale)
         return;
 
     mScale = scale;
+
+    syncComboBox();
+
     emit scaleChanged(mScale);
 }
 
 bool Zoomable::canZoomIn() const
 {
-    return mScale < zoomFactors[zoomFactorCount - 1];
+    return mScale < mZoomFactors.last();
 }
 
 bool Zoomable::canZoomOut() const
 {
-    return mScale > zoomFactors[0];
+    return mScale > mZoomFactors.first();
 }
 
 void Zoomable::handleWheelDelta(int delta)
@@ -77,20 +98,45 @@ void Zoomable::handleWheelDelta(int delta)
         if (delta < 0)
             factor = 1 / factor;
 
-        qreal scale = qBound(zoomFactors[0],
+        qreal scale = qBound(mZoomFactors.first(),
                              mScale * factor,
-                             zoomFactors[zoomFactorCount - 1]);
+                             mZoomFactors.back());
 
         // Round to at most four digits after the decimal point
         setScale(std::floor(scale * 10000 + 0.5) / 10000);
     }
 }
 
+void Zoomable::handlePinchGesture(QPinchGesture *pinch)
+{
+    if (!(pinch->changeFlags() & QPinchGesture::ScaleFactorChanged))
+        return;
+
+    switch (pinch->state()) {
+    case Qt::NoGesture:
+        break;
+    case Qt::GestureStarted:
+        mGestureStartScale = mScale;
+        // fall through
+    case Qt::GestureUpdated: {
+        qreal factor = pinch->scaleFactor();
+        qreal scale = qBound(mZoomFactors.first(),
+                             mGestureStartScale * factor,
+                             mZoomFactors.back());
+        setScale(std::floor(scale * 10000 + 0.5) / 10000);
+        break;
+    }
+    case Qt::GestureFinished:
+    case Qt::GestureCanceled:
+        break;
+    }
+}
+
 void Zoomable::zoomIn()
 {
-    for (int i = 0; i < zoomFactorCount; ++i) {
-        if (zoomFactors[i] > mScale) {
-            setScale(zoomFactors[i]);
+    foreach (qreal scale, mZoomFactors) {
+        if (scale > mScale) {
+            setScale(scale);
             break;
         }
     }
@@ -98,9 +144,9 @@ void Zoomable::zoomIn()
 
 void Zoomable::zoomOut()
 {
-    for (int i = zoomFactorCount - 1; i >= 0; --i) {
-        if (zoomFactors[i] < mScale) {
-            setScale(zoomFactors[i]);
+    for (int i = mZoomFactors.count() - 1; i >= 0; --i) {
+        if (mZoomFactors[i] < mScale) {
+            setScale(mZoomFactors[i]);
             break;
         }
     }
@@ -109,4 +155,67 @@ void Zoomable::zoomOut()
 void Zoomable::resetZoom()
 {
     setScale(1);
+}
+
+void Zoomable::setZoomFactors(const QVector<qreal>& factors)
+{
+    mZoomFactors = factors;
+}
+
+void Zoomable::connectToComboBox(QComboBox *comboBox)
+{
+    if (mComboBox) {
+        mComboBox->disconnect(this);
+        if (mComboBox->lineEdit())
+            mComboBox->lineEdit()->disconnect(this);
+        mComboBox->setValidator(0);
+    }
+
+    mComboBox = comboBox;
+
+    if (mComboBox) {
+        mComboBox->clear();
+        foreach (qreal scale, mZoomFactors)
+            mComboBox->addItem(scaleToString(scale), scale);
+        syncComboBox();
+        connect(mComboBox, SIGNAL(activated(int)),
+                this, SLOT(comboActivated(int)));
+
+        mComboBox->setEditable(true);
+        mComboBox->setInsertPolicy(QComboBox::NoInsert);
+        connect(mComboBox->lineEdit(), SIGNAL(editingFinished()),
+                this, SLOT(comboEdited()));
+
+        if (!mComboValidator)
+            mComboValidator = new QRegExpValidator(mComboRegExp, this);
+        mComboBox->setValidator(mComboValidator);
+    }
+}
+
+void Zoomable::comboActivated(int index)
+{
+    setScale(mComboBox->itemData(index).toReal());
+}
+
+void Zoomable::comboEdited()
+{
+    int pos = mComboRegExp.indexIn(mComboBox->currentText());
+    Q_ASSERT(pos != -1);
+
+    qreal scale = qBound(mZoomFactors.first(),
+                         qreal(mComboRegExp.cap(1).toDouble() / 100.f),
+                         mZoomFactors.last());
+
+    setScale(scale);
+}
+
+void Zoomable::syncComboBox()
+{
+    if (!mComboBox)
+        return;
+
+    int index = mComboBox->findData(mScale);
+    // For a custom scale, the current index must be set to -1
+    mComboBox->setCurrentIndex(index);
+    mComboBox->setEditText(scaleToString(mScale));
 }

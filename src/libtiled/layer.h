@@ -41,6 +41,7 @@
 namespace Tiled {
 
 class Map;
+class ImageLayer;
 class ObjectGroup;
 class TileLayer;
 class Tileset;
@@ -51,10 +52,24 @@ class Tileset;
 class TILEDSHARED_EXPORT Layer : public Object
 {
 public:
+    enum Type {
+        TileLayerType   = 0x01,
+        ObjectGroupType = 0x02,
+        ImageLayerType  = 0x04
+    };
+
+    enum { AnyLayerType = 0xFF };
+
     /**
      * Constructor.
      */
-    Layer(const QString &name, int x, int y, int width, int height);
+    Layer(Type type, const QString &name, int x, int y,
+          int width, int height);
+
+    /**
+     * Returns the type of this layer.
+     */
+    Type type() const { return mType; }
 
     /**
      * Returns the name of this layer.
@@ -139,9 +154,16 @@ public:
     int height() const { return mHeight; }
 
     /**
+     * Returns the size of this layer.
+     */
+    QSize size() const { return QSize(mWidth, mHeight); }
+
+    /**
      * Returns the bounds of this layer.
      */
     QRect bounds() const { return QRect(mX, mY, mWidth, mHeight); }
+
+    virtual bool isEmpty() const = 0;
 
     /**
      * Computes and returns the set of tilesets used by this layer.
@@ -194,13 +216,20 @@ public:
 
     // These functions allow checking whether this Layer is an instance of the
     // given subclass without relying on a dynamic_cast.
-    virtual TileLayer *asTileLayer() { return 0; }
-    virtual ObjectGroup *asObjectGroup() { return 0; }
+    bool isTileLayer() const { return mType == TileLayerType; }
+    bool isObjectGroup() const { return mType == ObjectGroupType; }
+    bool isImageLayer() const { return mType == ImageLayerType; }
+
+    // These actually return this layer cast to one of its subclasses.
+    TileLayer *asTileLayer();
+    ObjectGroup *asObjectGroup();
+    ImageLayer *asImageLayer();
 
 protected:
     Layer *initializeClone(Layer *clone) const;
 
     QString mName;
+    Type mType;
     int mX;
     int mY;
     int mWidth;

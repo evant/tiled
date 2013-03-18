@@ -29,6 +29,7 @@
 
 #include "tileset.h"
 #include "tile.h"
+#include "terrain.h"
 
 #include <QBitmap>
 
@@ -111,4 +112,215 @@ int Tileset::columnCountForWidth(int width) const
 {
     Q_ASSERT(mTileWidth > 0);
     return (width - mMargin + mTileSpacing) / (mTileWidth + mTileSpacing);
+}
+
+Terrain *Tileset::addTerrain(const QString &name, int imageTileId)
+{
+    Terrain *terrain = new Terrain(terrainCount(), this, name, imageTileId);
+    insertTerrain(terrainCount(), terrain);
+    return terrain;
+}
+
+void Tileset::insertTerrain(int index, Terrain *terrain)
+{
+    Q_ASSERT(terrain->tileset() == this);
+
+    mTerrainTypes.insert(index, terrain);
+
+    // Reassign terrain IDs
+    for (int terrainId = index; terrainId < mTerrainTypes.size(); ++terrainId)
+        mTerrainTypes.at(terrainId)->setId(terrainId);
+
+    // Adjust tile terrain references
+    foreach (Tile *tile, mTiles) {
+        for (int corner = 0; corner < 4; ++corner) {
+            const int terrainId = tile->cornerTerrainId(corner);
+            if (terrainId >= index)
+                tile->setCornerTerrain(corner, terrainId + 1);
+        }
+    }
+
+    mTerrainDistancesDirty = true;
+}
+
+Terrain *Tileset::takeTerrainAt(int index)
+{
+    Terrain *terrain = mTerrainTypes.takeAt(index);
+
+    // Reassign terrain IDs
+    for (int terrainId = index; terrainId < mTerrainTypes.size(); ++terrainId)
+        mTerrainTypes.at(terrainId)->setId(terrainId);
+
+    // Clear and adjust tile terrain references
+    foreach (Tile *tile, mTiles) {
+        for (int corner = 0; corner < 4; ++corner) {
+            const int terrainId = tile->cornerTerrainId(corner);
+            if (terrainId == index)
+                tile->setCornerTerrain(corner, 0xFF);
+            else if (terrainId > index)
+                tile->setCornerTerrain(corner, terrainId - 1);
+        }
+    }
+
+    mTerrainDistancesDirty = true;
+
+    return terrain;
+}
+
+int Tileset::terrainTransitionPenalty(int terrainType0, int terrainType1)
+{
+    if (mTerrainDistancesDirty) {
+        recalculateTerrainDistances();
+        mTerrainDistancesDirty = false;
+    }
+
+    terrainType0 = terrainType0 == 255 ? -1 : terrainType0;
+    terrainType1 = terrainType1 == 255 ? -1 : terrainType1;
+
+    // Do some magic, since we don't have a transition array for no-terrain
+    if (terrainType0 == -1 && terrainType1 == -1)
+        return 0;
+    if (terrainType0 == -1)
+        return mTerrainTypes.at(terrainType1)->transitionDistance(terrainType0);
+    return mTerrainTypes.at(terrainType0)->transitionDistance(terrainType1);
+}
+
+void Tileset::recalculateTerrainDistances()
+{
+    // some fancy macros which can search for a value in each byte of a word simultaneously
+    #define hasZeroByte(dword) (((dword) - 0x01010101UL) & ~(dword) & 0x80808080UL)
+    #define hasByteEqualTo(dword, value) (hasZeroByte((dword) ^ (~0UL/255 * (value))))
+
+    // Terrain distances are the number of transitions required before one terrain may meet another
+    // Terrains that have no transition path have a distance of -1
+
+    for (int i = 0; i < terrainCount(); ++i) {
+        Terrain *type = terrain(i);
+        QVector<int> distance(terrainCount() + 1, -1);
+
+        // Check all tiles for transitions to other terrain types
+        for (int j = 0; j < tileCount(); ++j) {
+            Tile *t = tileAt(j);
+
+            if (!hasByteEqualTo(t->terrain(), i))
+                continue;
+
+            // This tile has transitions, add the transitions as neightbours (distance 1)
+            int tl = t->cornerTerrainId(0);
+            int tr = t->cornerTerrainId(1);
+            int bl = t->cornerTerrainId(2);
+            int br = t->cornerTerrainId(3);
+
+            // Terrain on diagonally opposite corners are not actually a neighbour
+            if (tl == i || br == i) {
+                distance[tr + 1] = 1;
+                distance[bl + 1] = 1;
+            }
+            if (tr == i || bl == i) {
+                distance[tl + 1] = 1;
+                distance[br + 1] = 1;
+            }
+
+            // terrain has at least one tile of its own type
+            distance[i + 1] = 0;
+        }
+
+        type->setTransitionDistances(distance);
+    }
+
+    // Calculate indirect transition distances
+    bool bNewConnections;
+    do {
+        bNewConnections = false;
+
+        // For each combination of terrain types
+        for (int i = 0; i < terrainCount(); ++i) {
+            Terrain *t0 = terrain(i);
+            for (int j = 0; j < terrainCount(); ++j) {
+                if (i == j)
+                    continue;
+                Terrain *t1 = terrain(j);
+
+                // Scan through each terrain type, and see if we have any in common
+                for (int t = -1; t < terrainCount(); ++t) {
+                    int d0 = t0->transitionDistance(t);
+                    int d1 = t1->transitionDistance(t);
+                    if (d0 == -1 || d1 == -1)
+                        continue;
+
+                    // We have cound a common connection
+                    int d = t0->transitionDistance(j);
+                    Q_ASSERT(t1->transitionDistance(i) == d);
+
+                    // If the new path is shorter, record the new distance
+                    if (d == -1 || d0 + d1 < d) {
+                        d = d0 + d1;
+                        t0->setTransitionDistance(j, d);
+                        t1->setTransitionDistance(i, d);
+
+                        // We're making progress, flag for another iteration...
+                        bNewConnections = true;
+                    }
+                }
+            }
+        }
+
+        // Repeat while we are still making new connections (could take a number of iterations for distant terrain types to connect)
+    } while (bNewConnections);
+}
+
+void Tileset::addTile(const QPixmap &image)
+{
+    detachExternalImage();
+    Tile *newTile = new Tile(image, tileCount(), this);
+    mTiles.append(newTile);
+    if (mTileHeight < image.height())
+        mTileHeight = image.height();
+    if (mTileWidth < image.width())
+        mTileWidth = image.width();
+}
+
+void Tileset::setTileImage(int index, const QPixmap &image)
+{
+    detachExternalImage();
+    Tile *tile = tileAt(index);
+    if (tile) {
+        QPixmap previousImage = tile->image();
+        tile->setImage(image);
+        if (previousImage.height() != image.height() ||
+                previousImage.width() != image.width()) {
+            // Update our max. tile size
+            if (previousImage.height() == mTileHeight ||
+                    previousImage.width() == mTileWidth) {
+                // This used to be the max image; we have to recompute
+                updateTileSize();
+            } else {
+                // Check if we have a new maximum
+                if (mTileHeight < image.height())
+                    mTileHeight = image.height();
+                if (mTileWidth < image.width())
+                    mTileWidth = image.width();
+            }
+        }
+    }
+}
+
+void Tileset::detachExternalImage()
+{
+    mFileName = QString();
+    mImageSource = QString();
+}
+
+void Tileset::updateTileSize()
+{
+    int maxWidth = 0;
+    int maxHeight = 0;
+    foreach (Tile *tile, mTiles) {
+        if (maxWidth < tile->width())
+            maxWidth = tile->width();
+        if (maxHeight < tile->height())
+            maxHeight = tile->height();
+    }
+    mTileWidth = maxWidth;
+    mTileHeight = maxHeight;
 }

@@ -26,9 +26,11 @@
 #include "addremovetileset.h"
 #include "changeproperties.h"
 #include "changetileselection.h"
+#include "imagelayer.h"
 #include "hexagonalrenderer.h"
 #include "isometricrenderer.h"
 #include "layermodel.h"
+#include "mapobjectmodel.h"
 #include "map.h"
 #include "mapobject.h"
 #include "movelayer.h"
@@ -36,8 +38,12 @@
 #include "offsetlayer.h"
 #include "orthogonalrenderer.h"
 #include "painttilelayer.h"
+#include "pluginmanager.h"
 #include "resizelayer.h"
 #include "resizemap.h"
+#include "staggeredrenderer.h"
+#include "terrain.h"
+#include "terrainmodel.h"
 #include "tile.h"
 #include "tilelayer.h"
 #include "tilesetmanager.h"
@@ -55,6 +61,8 @@ MapDocument::MapDocument(Map *map, const QString &fileName):
     mFileName(fileName),
     mMap(map),
     mLayerModel(new LayerModel(this)),
+    mMapObjectModel(new MapObjectModel(this)),
+    mTerrainModel(new TerrainModel(this, this)),
     mUndoStack(new QUndoStack(this))
 {
     switch (map->orientation()) {
@@ -63,6 +71,9 @@ MapDocument::MapDocument(Map *map, const QString &fileName):
         break;
     case Map::Hexagonal:
         mRenderer = new HexagonalRenderer(map);
+        break;
+    case Map::Staggered:
+        mRenderer = new StaggeredRenderer(map);
         break;
     default:
         mRenderer = new OrthogonalRenderer(map);
@@ -78,6 +89,17 @@ MapDocument::MapDocument(Map *map, const QString &fileName):
             SLOT(onLayerAboutToBeRemoved(int)));
     connect(mLayerModel, SIGNAL(layerRemoved(int)), SLOT(onLayerRemoved(int)));
     connect(mLayerModel, SIGNAL(layerChanged(int)), SIGNAL(layerChanged(int)));
+
+    // Forward signals emitted from the map object model
+    mMapObjectModel->setMapDocument(this);
+    connect(mMapObjectModel, SIGNAL(objectsAdded(QList<MapObject*>)),
+            SIGNAL(objectsAdded(QList<MapObject*>)));
+    connect(mMapObjectModel, SIGNAL(objectsChanged(QList<MapObject*>)),
+            SIGNAL(objectsChanged(QList<MapObject*>)));
+    connect(mMapObjectModel, SIGNAL(objectsAboutToBeRemoved(QList<MapObject*>)),
+            SIGNAL(objectsAboutToBeRemoved(QList<MapObject*>)));
+    connect(mMapObjectModel, SIGNAL(objectsRemoved(QList<MapObject*>)),
+            SLOT(onObjectsRemoved(QList<MapObject*>)));
 
     connect(mUndoStack, SIGNAL(cleanChanged(bool)), SIGNAL(modifiedChanged()));
 
@@ -103,11 +125,19 @@ bool MapDocument::save(QString *error)
 
 bool MapDocument::save(const QString &fileName, QString *error)
 {
-    TmxMapWriter mapWriter;
+    PluginManager *pm = PluginManager::instance();
 
-    if (!mapWriter.write(map(), fileName)) {
+    MapWriterInterface *chosenWriter = 0;
+    if (const Plugin *plugin = pm->pluginByFileName(mWriterPluginFileName))
+        chosenWriter = qobject_cast<MapWriterInterface*>(plugin->instance);
+
+    TmxMapWriter mapWriter;
+    if (!chosenWriter)
+        chosenWriter = &mapWriter;
+
+    if (!chosenWriter->write(map(), fileName)) {
         if (error)
-            *error = mapWriter.errorString();
+            *error = chosenWriter->errorString();
         return false;
     }
 
@@ -225,19 +255,23 @@ void MapDocument::offsetMap(const QList<int> &layerIndexes,
  * Adds a layer of the given type to the top of the layer stack. After adding
  * the new layer, emits editLayerNameRequested().
  */
-void MapDocument::addLayer(LayerType layerType)
+void MapDocument::addLayer(Layer::Type layerType)
 {
     Layer *layer = 0;
     QString name;
 
     switch (layerType) {
-    case TileLayerType:
+    case Layer::TileLayerType:
         name = tr("Tile Layer %1").arg(mMap->tileLayerCount() + 1);
         layer = new TileLayer(name, 0, 0, mMap->width(), mMap->height());
         break;
-    case ObjectGroupType:
+    case Layer::ObjectGroupType:
         name = tr("Object Layer %1").arg(mMap->objectGroupCount() + 1);
         layer = new ObjectGroup(name, 0, 0, mMap->width(), mMap->height());
+        break;
+    case Layer::ImageLayerType:
+        name = tr("Image Layer %1").arg(mMap->imageLayerCount() + 1);
+        layer = new ImageLayer(name, 0, 0, mMap->width(), mMap->height());
         break;
     }
     Q_ASSERT(layer);
@@ -344,6 +378,7 @@ void MapDocument::toggleOtherLayers(int index)
  */
 void MapDocument::insertTileset(int index, Tileset *tileset)
 {
+    emit tilesetAboutToBeAdded(index);
     mMap->insertTileset(index, tileset);
     TilesetManager *tilesetManager = TilesetManager::instance();
     tilesetManager->addReference(tileset);
@@ -359,6 +394,7 @@ void MapDocument::insertTileset(int index, Tileset *tileset)
  */
 void MapDocument::removeTilesetAt(int index)
 {
+    emit tilesetAboutToBeRemoved(index);
     Tileset *tileset = mMap->tilesets().at(index);
     mMap->removeTilesetAt(index);
     emit tilesetRemoved(tileset);
@@ -460,36 +496,21 @@ void MapDocument::emitRegionEdited(const QRegion &region, Layer *layer)
     emit regionEdited(region, layer);
 }
 
-/**
- * Emits the objects added signal with the specified list of objects.
- * This will cause the scene to insert the related items.
- */
-void MapDocument::emitObjectsAdded(const QList<MapObject*> &objects)
+void MapDocument::emitTileTerrainChanged(const QList<Tile *> &tiles)
 {
-    emit objectsAdded(objects);
+    if (!tiles.isEmpty())
+        emit tileTerrainChanged(tiles);
 }
 
 /**
- * Emits the objects removed signal with the specified list of objects.
- * This will cause the scene to remove the related items.
- *
- * Before emitting the signal, the objects are also removed from the list of
+ * Before forwarding the signal, the objects are removed from the list of
  * selected objects, triggering a selectedObjectsChanged signal when
  * appropriate.
  */
-void MapDocument::emitObjectsRemoved(const QList<MapObject*> &objects)
+void MapDocument::onObjectsRemoved(const QList<MapObject*> &objects)
 {
     deselectObjects(objects);
     emit objectsRemoved(objects);
-}
-
-/**
- * Emits the objects changed signal with the specified list of objects.
- * This will cause the scene to update the related items.
- */
-void MapDocument::emitObjectsChanged(const QList<MapObject*> &objects)
-{
-    emit objectsChanged(objects);
 }
 
 void MapDocument::onLayerAdded(int index)
@@ -506,6 +527,7 @@ void MapDocument::onLayerAboutToBeRemoved(int index)
     // Deselect any objects on this layer when necessary
     if (ObjectGroup *og = dynamic_cast<ObjectGroup*>(mMap->layerAt(index)))
         deselectObjects(og->objects());
+    emit layerAboutToBeRemoved(index);
 }
 
 void MapDocument::onLayerRemoved(int index)

@@ -124,7 +124,11 @@ PreferencesDialog::PreferencesDialog(QWidget *parent) :
     mUi->objectTypesTable->setItemDelegateForColumn(1, new ColorDelegate(this));
 
     QHeaderView *horizontalHeader = mUi->objectTypesTable->horizontalHeader();
+#if QT_VERSION >= 0x050000
+    horizontalHeader->setSectionResizeMode(QHeaderView::Stretch);
+#else
     horizontalHeader->setResizeMode(QHeaderView::Stretch);
+#endif
 
     Utils::setThemeIcon(mUi->addObjectTypeButton, "add");
     Utils::setThemeIcon(mUi->removeObjectTypeButton, "remove");
@@ -134,6 +138,8 @@ PreferencesDialog::PreferencesDialog(QWidget *parent) :
     connect(mUi->languageCombo, SIGNAL(currentIndexChanged(int)),
             SLOT(languageSelected(int)));
     connect(mUi->openGL, SIGNAL(toggled(bool)), SLOT(useOpenGLToggled(bool)));
+    connect(mUi->gridColor, SIGNAL(colorChanged(QColor)),
+            Preferences::instance(), SLOT(setGridColor(QColor)));
 
     connect(mUi->objectTypesTable->selectionModel(),
             SIGNAL(selectionChanged(QItemSelection,QItemSelection)),
@@ -153,6 +159,9 @@ PreferencesDialog::PreferencesDialog(QWidget *parent) :
             SLOT(applyObjectTypes()));
     connect(mObjectTypesModel, SIGNAL(rowsRemoved(QModelIndex,int,int)),
             SLOT(applyObjectTypes()));
+
+    connect(mUi->autoMapWhileDrawing, SIGNAL(toggled(bool)),
+            SLOT(useAutomappingDrawingToggled(bool)));
 }
 
 PreferencesDialog::~PreferencesDialog()
@@ -292,20 +301,20 @@ void PreferencesDialog::fromPreferences()
 
     int formatIndex = 0;
     switch (prefs->layerDataFormat()) {
-    case MapWriter::XML:
+    case Map::XML:
         formatIndex = 0;
         break;
-    case MapWriter::Base64:
+    case Map::Base64:
         formatIndex = 1;
         break;
-    case MapWriter::Base64Gzip:
+    case Map::Base64Gzip:
         formatIndex = 2;
         break;
     default:
-    case MapWriter::Base64Zlib:
+    case Map::Base64Zlib:
         formatIndex = 3;
         break;
-    case MapWriter::CSV:
+    case Map::CSV:
         formatIndex = 4;
         break;
     }
@@ -316,7 +325,8 @@ void PreferencesDialog::fromPreferences()
     if (languageIndex == -1)
         languageIndex = 0;
     mUi->languageCombo->setCurrentIndex(languageIndex);
-
+    mUi->gridColor->setColor(prefs->gridColor());
+    mUi->autoMapWhileDrawing->setChecked(prefs->automappingDrawing());
     mObjectTypesModel->setObjectTypes(prefs->objectTypes());
 }
 
@@ -327,21 +337,27 @@ void PreferencesDialog::toPreferences()
     prefs->setReloadTilesetsOnChanged(mUi->reloadTilesetImages->isChecked());
     prefs->setDtdEnabled(mUi->enableDtd->isChecked());
     prefs->setLayerDataFormat(layerDataFormat());
+    prefs->setAutomappingDrawing(mUi->autoMapWhileDrawing->isChecked());
 }
 
-MapWriter::LayerDataFormat PreferencesDialog::layerDataFormat() const
+Map::LayerDataFormat PreferencesDialog::layerDataFormat() const
 {
     switch (mUi->layerDataCombo->currentIndex()) {
     case 0:
-        return MapWriter::XML;
+        return Map::XML;
     case 1:
-        return MapWriter::Base64;
+        return Map::Base64;
     case 2:
-        return MapWriter::Base64Gzip;
+        return Map::Base64Gzip;
     case 3:
     default:
-        return MapWriter::Base64Zlib;
+        return Map::Base64Zlib;
     case 4:
-        return MapWriter::CSV;
+        return Map::CSV;
     }
+}
+
+void PreferencesDialog::useAutomappingDrawingToggled(bool enabled)
+{
+    Preferences::instance()->setAutomappingDrawing(enabled);
 }

@@ -36,7 +36,7 @@
 using namespace Tiled;
 
 TileLayer::TileLayer(const QString &name, int x, int y, int width, int height):
-    Layer(name, x, y, width, height),
+    Layer(TileLayerType, name, x, y, width, height),
     mMaxTileSize(0, 0),
     mGrid(width * height)
 {
@@ -88,15 +88,14 @@ void TileLayer::setCell(int x, int y, const Cell &cell)
     Q_ASSERT(contains(x, y));
 
     if (cell.tile) {
-        int width = cell.tile->width();
-        int height = cell.tile->height();
+        QSize size = cell.tile->size();
 
         if (cell.flippedAntiDiagonally)
-            std::swap(width, height);
+            size.transpose();
 
         const QPoint offset = cell.tile->tileset()->tileOffset();
 
-        mMaxTileSize = maxSize(QSize(width, height), mMaxTileSize);
+        mMaxTileSize = maxSize(size, mMaxTileSize);
         mOffsetMargins = maxMargins(QMargins(-offset.x(),
                                              -offset.y(),
                                              offset.x(),
@@ -162,6 +161,15 @@ void TileLayer::setCells(int x, int y, TileLayer *layer,
         for (int _x = rect.left(); _x <= rect.right(); ++_x)
             for (int _y = rect.top(); _y <= rect.bottom(); ++_y)
                 setCell(_x, _y, layer->cellAt(_x - x, _y - y));
+}
+
+void TileLayer::erase(const QRegion &area)
+{
+    const Cell emptyCell;
+    foreach (const QRect &rect, area.rects())
+        for (int x = rect.left(); x <= rect.right(); ++x)
+            for (int y = rect.top(); y <= rect.bottom(); ++y)
+                setCell(x, y, emptyCell);
 }
 
 void TileLayer::flip(FlipDirection direction)
@@ -287,6 +295,9 @@ void TileLayer::replaceReferencesToTileset(Tileset *oldTileset,
 
 void TileLayer::resize(const QSize &size, const QPoint &offset)
 {
+    if (this->size() == size && offset.isNull())
+        return;
+
     QVector<Cell> newGrid(size.width() * size.height());
 
     // Copy over the preserved part

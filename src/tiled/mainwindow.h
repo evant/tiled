@@ -30,6 +30,7 @@
 #include <QSessionManager>
 #include <QSettings>
 
+class QComboBox;
 class QLabel;
 class QToolButton;
 
@@ -40,6 +41,7 @@ class MainWindow;
 namespace Tiled {
 
 class TileLayer;
+class Terrain;
 class MapReaderInterface;
 
 namespace Internal {
@@ -48,12 +50,18 @@ class ClipboardManager;
 class DocumentManager;
 class LayerDock;
 class MapDocumentActionHandler;
+class MapsDock;
 class MapScene;
 class StampBrush;
 class BucketFillTool;
+class TerrainBrush;
 class TilesetDock;
+class TerrainDock;
 class MapView;
 class CommandButton;
+class ObjectsDock;
+class Zoomable;
+class MiniMapDock;
 
 /**
  * The main editor window.
@@ -66,7 +74,7 @@ class MainWindow : public QMainWindow
     Q_OBJECT
 
 public:
-    MainWindow(QWidget *parent = 0, Qt::WFlags flags = 0);
+    MainWindow(QWidget *parent = 0, Qt::WindowFlags flags = 0);
     ~MainWindow();
 
     void commitData(QSessionManager &manager);
@@ -123,6 +131,7 @@ public slots:
 
     bool newTileset(const QString &path = QString());
     void newTilesets(const QStringList &paths);
+    void reloadTilesets();
     void addExternalTileset();
     void resizeMap();
     void offsetMap();
@@ -144,6 +153,7 @@ public slots:
     void rotateStampRight();
 
     void setStampBrush(const TileLayer *tiles);
+    void setTerrainBrush(const Terrain *terrain);
     void updateStatusInfoLabel(const QString &statusInfo);
 
     void mapDocumentChanged(MapDocument *mapDocument);
@@ -151,6 +161,7 @@ public slots:
 
     void autoMappingError();
     void autoMappingWarning();
+
 private:
     /**
       * Asks the user whether the current map should be saved when necessary.
@@ -200,8 +211,14 @@ private:
     MapDocument *mMapDocument;
     MapDocumentActionHandler *mActionHandler;
     LayerDock *mLayerDock;
+    MapsDock *mMapsDock;
+    ObjectsDock *mObjectsDock;
     TilesetDock *mTilesetDock;
-    QLabel *mZoomLabel;
+    TerrainDock *mTerrainDock;
+    MiniMapDock* mMiniMapDock;
+    QLabel *mCurrentLayerLabel;
+    Zoomable *mZoomable;
+    QComboBox *mZoomComboBox;
     QLabel *mStatusInfoLabel;
     QSettings mSettings;
     QToolButton *mRandomButton;
@@ -209,6 +226,7 @@ private:
 
     StampBrush *mStampBrush;
     BucketFillTool *mBucketFillTool;
+    TerrainBrush *mTerrainBrush;
 
     ClipboardManager *mClipboardManager;
 

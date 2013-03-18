@@ -41,7 +41,7 @@ Tiled::Map *JsonPlugin::read(const QString &fileName)
     QFile file(fileName);
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
         mError = tr("Could not open file for reading.");
-        return false;
+        return 0;
     }
 
     JsonReader reader;
@@ -66,7 +66,7 @@ Tiled::Map *JsonPlugin::read(const QString &fileName)
 bool JsonPlugin::write(const Tiled::Map *map, const QString &fileName)
 {
     QFile file(fileName);
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)){
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
         mError = tr("Could not open file for writing.");
         return false;
     }
@@ -109,5 +109,6 @@ QString JsonPlugin::errorString() const
 {
     return mError;
 }
-
+#if QT_VERSION < 0x050000
 Q_EXPORT_PLUGIN2(Json, JsonPlugin)
+#endif

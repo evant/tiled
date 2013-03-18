@@ -35,6 +35,8 @@
 #include "tilelayer.h"
 #include "tilelayeritem.h"
 #include "tileselectionitem.h"
+#include "imagelayer.h"
+#include "imagelayeritem.h"
 #include "toolmanager.h"
 #include "tilesetmanager.h"
 
@@ -56,27 +58,33 @@ MapScene::MapScene(QObject *parent):
     mMapDocument(0),
     mSelectedTool(0),
     mActiveTool(0),
-    mGridVisible(true),
     mUnderMouse(false),
     mCurrentModifiers(Qt::NoModifier),
-    mDarkRectangle(new QGraphicsRectItem)
+    mDarkRectangle(new QGraphicsRectItem),
+    mDefaultBackgroundColor(Qt::darkGray)
 {
-    setBackgroundBrush(Qt::darkGray);
+    setBackgroundBrush(mDefaultBackgroundColor);
 
     TilesetManager *tilesetManager = TilesetManager::instance();
     connect(tilesetManager, SIGNAL(tilesetChanged(Tileset*)),
             this, SLOT(tilesetChanged(Tileset*)));
 
     Preferences *prefs = Preferences::instance();
+    connect(prefs, SIGNAL(showGridChanged(bool)), SLOT(setGridVisible(bool)));
+    connect(prefs, SIGNAL(showTileObjectOutlinesChanged(bool)),
+            SLOT(setShowTileObjectOutlines(bool)));
     connect(prefs, SIGNAL(objectTypesChanged()), SLOT(syncAllObjectItems()));
     connect(prefs, SIGNAL(highlightCurrentLayerChanged(bool)),
             SLOT(setHighlightCurrentLayer(bool)));
+    connect(prefs, SIGNAL(gridColorChanged(QColor)), SLOT(update()));
 
     mDarkRectangle->setPen(Qt::NoPen);
     mDarkRectangle->setBrush(Qt::black);
     mDarkRectangle->setOpacity(darkeningFactor);
     addItem(mDarkRectangle);
 
+    mGridVisible = prefs->showGrid();
+    mShowTileObjectOutlines = prefs->showTileObjectOutlines();
     mHighlightCurrentLayer = prefs->highlightCurrentLayer();
 
     // Install an event filter so that we can get key events on behalf of the
@@ -99,6 +107,9 @@ void MapScene::setMapDocument(MapDocument *mapDocument)
     refreshScene();
 
     if (mMapDocument) {
+        mMapDocument->renderer()->setFlag(ShowTileObjectOutlines,
+                                          mShowTileObjectOutlines);
+
         connect(mMapDocument, SIGNAL(mapChanged()),
                 this, SLOT(mapChanged()));
         connect(mMapDocument, SIGNAL(regionChanged(QRegion)),
@@ -160,6 +171,11 @@ void MapScene::refreshScene()
     const Map *map = mMapDocument->map();
     mLayerItems.resize(map->layerCount());
 
+    if (map->backgroundColor().isValid())
+        setBackgroundBrush(map->backgroundColor());
+    else
+        setBackgroundBrush(mDefaultBackgroundColor);
+
     int layerIndex = 0;
     foreach (Layer *layer, map->layers()) {
         QGraphicsItem *layerItem = createLayerItem(layer);
@@ -180,9 +196,9 @@ QGraphicsItem *MapScene::createLayerItem(Layer *layer)
 {
     QGraphicsItem *layerItem = 0;
 
-    if (TileLayer *tl = dynamic_cast<TileLayer*>(layer)) {
+    if (TileLayer *tl = layer->asTileLayer()) {
         layerItem = new TileLayerItem(tl, mMapDocument->renderer());
-    } else if (ObjectGroup *og = dynamic_cast<ObjectGroup*>(layer)) {
+    } else if (ObjectGroup *og = layer->asObjectGroup()) {
         ObjectGroupItem *ogItem = new ObjectGroupItem(og);
         foreach (MapObject *object, og->objects()) {
             MapObjectItem *item = new MapObjectItem(object, mMapDocument,
@@ -190,6 +206,8 @@ QGraphicsItem *MapScene::createLayerItem(Layer *layer)
             mObjectItems.insert(object, item);
         }
         layerItem = ogItem;
+    } else if (ImageLayer *il = layer->asImageLayer()) {
+        layerItem = new ImageLayerItem(il, mMapDocument->renderer());
     }
 
     Q_ASSERT(layerItem);
@@ -289,6 +307,12 @@ void MapScene::mapChanged()
         if (TileLayerItem *tli = dynamic_cast<TileLayerItem*>(item))
             tli->syncWithTileLayer();
     }
+
+    const Map *map = mMapDocument->map();
+    if (map->backgroundColor().isValid())
+        setBackgroundBrush(map->backgroundColor());
+    else
+        setBackgroundBrush(mDefaultBackgroundColor);
 }
 
 void MapScene::tilesetChanged(Tileset *tileset)
@@ -426,6 +450,20 @@ void MapScene::setGridVisible(bool visible)
     update();
 }
 
+void MapScene::setShowTileObjectOutlines(bool enabled)
+{
+    if (mShowTileObjectOutlines == enabled)
+        return;
+
+    mShowTileObjectOutlines = enabled;
+
+    if (mMapDocument) {
+        mMapDocument->renderer()->setFlag(ShowTileObjectOutlines, enabled);
+        if (!mObjectItems.isEmpty())
+            update();
+    }
+}
+
 void MapScene::setHighlightCurrentLayer(bool highlightCurrentLayer)
 {
     if (mHighlightCurrentLayer == highlightCurrentLayer)
@@ -440,7 +478,8 @@ void MapScene::drawForeground(QPainter *painter, const QRectF &rect)
     if (!mMapDocument || !mGridVisible)
         return;
 
-    mMapDocument->renderer()->drawGrid(painter, rect);
+    Preferences *prefs = Preferences::instance();
+    mMapDocument->renderer()->drawGrid(painter, rect, prefs->gridColor());
 }
 
 bool MapScene::event(QEvent *event)
