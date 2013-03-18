@@ -395,6 +395,20 @@ void MainWindow::changeEvent(QEvent *event)
     }
 }
 
+void MainWindow::keyPressEvent(QKeyEvent *event)
+{
+    if (event->key() == Qt::Key_Space && !event->isAutoRepeat())
+        if (MapView *mapView = mDocumentManager->currentMapView())
+            mapView->setHandScrolling(true);
+}
+
+void MainWindow::keyReleaseEvent(QKeyEvent *event)
+{
+    if (event->key() == Qt::Key_Space && !event->isAutoRepeat())
+        if (MapView *mapView = mDocumentManager->currentMapView())
+            mapView->setHandScrolling(false);
+}
+
 void MainWindow::dragEnterEvent(QDragEnterEvent *e)
 {
     const QList<QUrl> urls = e->mimeData()->urls();
@@ -470,24 +484,33 @@ bool MainWindow::openFile(const QString &fileName)
 
 void MainWindow::openLastFiles()
 {
-    const QStringList files = recentFiles();
-
     mSettings.beginGroup(QLatin1String("recentFiles"));
 
-    int openCount = mSettings.value(QLatin1String("recentOpenedFiles"), 1).toInt();
+    QStringList lastOpenFiles = mSettings.value(
+                QLatin1String("lastOpenFiles")).toStringList();
+    QVariant openCountVariant = mSettings.value(
+                QLatin1String("recentOpenedFiles"));
+
+    // Backwards compatibility mode
+    if (openCountVariant.isValid()) {
+        const QStringList recentFiles = mSettings.value(
+                    QLatin1String("fileNames")).toStringList();
+        int openCount = qMin(openCountVariant.toInt(), recentFiles.size());
+        for (; openCount; --openCount)
+            lastOpenFiles.append(recentFiles.at(openCount - 1));
+        mSettings.remove(QLatin1String("recentOpenedFiles"));
+    }
 
     QStringList mapScales = mSettings.value(
-                            QLatin1String("mapScale")).toStringList();
+                QLatin1String("mapScale")).toStringList();
     QStringList scrollX = mSettings.value(
-                          QLatin1String("scrollX")).toStringList();
+                QLatin1String("scrollX")).toStringList();
     QStringList scrollY = mSettings.value(
-                          QLatin1String("scrollY")).toStringList();
+                QLatin1String("scrollY")).toStringList();
     QStringList selectedLayer = mSettings.value(
-                                QLatin1String("selectedLayer")).toStringList();
+                QLatin1String("selectedLayer")).toStringList();
 
-    for (int i = 0; i < openCount; i++) {
-        if (!(i < files.size()))
-            break;
+    for (int i = 0; i < lastOpenFiles.size(); i++) {
         if (!(i < mapScales.size()))
             continue;
         if (!(i < scrollX.size()))
@@ -497,7 +520,7 @@ void MainWindow::openLastFiles()
         if (!(i < selectedLayer.size()))
             continue;
 
-        if (openFile(files.at(i))) {
+        if (openFile(lastOpenFiles.at(i))) {
             MapView *mapView = mDocumentManager->currentMapView();
 
             // Restore camera to the previous position
@@ -1121,15 +1144,22 @@ void MainWindow::flipStampVertically()
 }
 
 /**
- * Sets the stamp brush in response to a change in the selection in the tileset
- * view.
+ * Sets the stamp brush, which is used by both the stamp brush and the bucket
+ * fill tool.
  */
 void MainWindow::setStampBrush(const TileLayer *tiles)
 {
-    if (tiles) {
-        mStampBrush->setStamp(static_cast<TileLayer*>(tiles->clone()));
-        mBucketFillTool->setStamp(static_cast<TileLayer*>(tiles->clone()));
-    }
+    if (!tiles)
+        return;
+
+    mStampBrush->setStamp(static_cast<TileLayer*>(tiles->clone()));
+    mBucketFillTool->setStamp(static_cast<TileLayer*>(tiles->clone()));
+
+    // When selecting a new stamp, it makes sense to switch to a stamp tool
+    ToolManager *m = ToolManager::instance();
+    AbstractTool *selectedTool = m->selectedTool();
+    if (selectedTool != mStampBrush && selectedTool != mBucketFillTool)
+        m->selectTool(mStampBrush);
 }
 
 void MainWindow::updateStatusInfoLabel(const QString &statusInfo)
@@ -1145,18 +1175,17 @@ void MainWindow::writeSettings()
     mSettings.endGroup();
 
     mSettings.beginGroup(QLatin1String("recentFiles"));
-    mSettings.setValue(QLatin1String("recentOpenedFiles"),
-                       mDocumentManager->documentCount());
-
     if (MapDocument *document = mDocumentManager->currentDocument())
         mSettings.setValue(QLatin1String("lastActive"), document->fileName());
 
+    QStringList fileList;
     QStringList mapScales;
     QStringList scrollX;
     QStringList scrollY;
     QStringList selectedLayer;
     for (int i = 0; i < mDocumentManager->documentCount(); i++) {
         mDocumentManager->switchToDocument(i);
+        fileList.append(mDocumentManager->currentDocument()->fileName());
         MapView *mapView = mDocumentManager->currentMapView();
         const int currentLayerIndex = mMapDocument->currentLayerIndex();
 
@@ -1167,6 +1196,7 @@ void MainWindow::writeSettings()
                        mapView->verticalScrollBar()->sliderPosition()));
         selectedLayer.append(QString::number(currentLayerIndex));
     }
+    mSettings.setValue(QLatin1String("lastOpenFiles"), fileList);
     mSettings.setValue(QLatin1String("mapScale"), mapScales);
     mSettings.setValue(QLatin1String("scrollX"), scrollX);
     mSettings.setValue(QLatin1String("scrollY"), scrollY);

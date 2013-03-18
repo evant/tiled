@@ -25,6 +25,10 @@
 #include <QProcess>
 #include <QVariant>
 
+#ifdef Q_WS_MAC
+#include <QTemporaryFile>
+#endif
+
 namespace Tiled {
 namespace Internal {
 
@@ -47,9 +51,10 @@ struct Command
     QString finalCommand() const;
 
     /**
-     * Executes the command in the operating system shell.
+     * Executes the command in the operating system shell or terminal
+     * application.
      */
-    void execute() const;
+    void execute(bool inTerminal = false) const;
 
     /**
      * Stores this command in a QVariant.
@@ -67,14 +72,20 @@ class CommandProcess : public QProcess
     Q_OBJECT
 
 public:
-    CommandProcess(const Command &command);
+    CommandProcess(const Command &command, bool inTerminal = false);
 
 private slots:
     void handleError(QProcess::ProcessError);
 
 private:
+    void handleError(const QString &);
+
     QString mName;
     QString mFinalCommand;
+
+#ifdef Q_WS_MAC
+    QTemporaryFile mFile;
+#endif
 };
 
 } // namespace Internal

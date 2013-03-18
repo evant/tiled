@@ -43,7 +43,7 @@ QString Command::finalCommand() const
     return finalCommand;
 }
 
-void Command::execute() const
+void Command::execute(bool inTerminal) const
 {
     // Save if save option is unset or true
     QSettings settings;
@@ -55,7 +55,7 @@ void Command::execute() const
     }
 
     // Start the process
-    new CommandProcess(*this);
+    new CommandProcess(*this, inTerminal);
 }
 
 QVariant Command::toQVariant() const
@@ -86,10 +86,13 @@ Command Command::fromQVariant(const QVariant &variant)
     return command;
 }
 
-CommandProcess::CommandProcess(const Command &command)
+CommandProcess::CommandProcess(const Command &command, bool inTerminal)
     : QProcess(DocumentManager::instance())
     , mName(command.name)
     , mFinalCommand(command.finalCommand())
+#ifdef Q_WS_MAC
+    , mFile(QLatin1String("tiledXXXXXX.command"))
+#endif
 {
     // Give an error if the command is empty or just whitespace
     if (mFinalCommand.trimmed().isEmpty()) {
@@ -97,12 +100,55 @@ CommandProcess::CommandProcess(const Command &command)
         return;
     }
 
-    start(mFinalCommand);
+    // Modify the command to run in a terminal
+    if (inTerminal) {
+#ifdef Q_WS_X11
+        static bool hasGnomeTerminal = QProcess::execute(
+                                    QLatin1String("which gnome-terminal")) == 0;
+
+        if (hasGnomeTerminal)
+            mFinalCommand = QLatin1String("gnome-terminal -x ") + mFinalCommand;
+        else
+            mFinalCommand = QLatin1String("xterm -e ") + mFinalCommand;
+#elif defined(Q_WS_MAC)
+        // The only way I know to launch a Terminal with a command on mac is
+        // to make a .command file and open it. The client command invoke the
+        // exectuable directly (rather than using open) in order to get std
+        // output in the terminal. Otherwise, you can use the Console
+        // application to see the output.
+
+        // Create and write the command to a .command file
+
+        if (!mFile.open()) {
+            handleError(tr("Unable to create/open %1").arg(mFile.fileName()));
+            return;
+        }
+        mFile.write(mFinalCommand.toStdString().c_str());
+        mFile.close();
+
+        // Add execute permission to the file
+        int chmodRet = QProcess::execute(QString(QLatin1String(
+                                     "chmod +x \"%1\"")).arg(mFile.fileName()));
+        if (chmodRet != 0) {
+            handleError(tr("Unable to add executable permissions to %1")
+                                                        .arg(mFile.fileName()));
+            return;
+        }
+
+        // Use open command to launch the command in the terminal
+        // -W makes it not return immediately
+        // -n makes it open a new instance of terminal if it is open already
+        mFinalCommand = QString(QLatin1String("open -W -n \"%1\""))
+                                                         .arg(mFile.fileName());
+#endif
+    }
 
     connect(this, SIGNAL(error(QProcess::ProcessError)),
             SLOT(handleError(QProcess::ProcessError)));
 
     connect(this, SIGNAL(finished(int)), SLOT(deleteLater()));
+
+    start(mFinalCommand);
 }
 
 void CommandProcess::handleError(QProcess::ProcessError error)
@@ -118,12 +164,18 @@ void CommandProcess::handleError(QProcess::ProcessError error)
     case QProcess::Timedout:
         errorStr = tr("The command timed out.");
         break;
-    default: errorStr = tr("An unknown error occurred.");
+    default:
+        errorStr = tr("An unknown error occurred.");
     }
 
+    handleError(errorStr);
+}
+
+void CommandProcess::handleError(const QString &error)
+{
     QString title = tr("Error Executing %1").arg(mName);
 
-    QString message = errorStr + QLatin1String("\n\n") + mFinalCommand;
+    QString message = error + QLatin1String("\n\n") + mFinalCommand;
 
     QWidget *parent = DocumentManager::instance()->widget();
     QMessageBox::warning(parent, title, message);
