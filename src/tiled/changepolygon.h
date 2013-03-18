@@ -1,6 +1,6 @@
 /*
- * selectiontool.h
- * Copyright 2009-2010, Thorbjørn Lindeijer <thorbjorn@lindeijer.nl>
+ * changepolygon.h
+ * Copyright 2011, Thorbjørn Lindeijer <thorbjorn@lindeijer.nl>
  *
  * This file is part of Tiled.
  *
@@ -18,47 +18,45 @@
  * this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef SELECTIONTOOL_H
-#define SELECTIONTOOL_H
+#ifndef CHANGEPOLYGON_H
+#define CHANGEPOLYGON_H
 
-#include "abstracttiletool.h"
+#include <QPolygonF>
+#include <QUndoCommand>
 
 namespace Tiled {
+
+class MapObject;
+
 namespace Internal {
 
-class SelectionTool : public AbstractTileTool
+class MapDocument;
+
+/**
+ * Changes the polygon of a MapObject.
+ *
+ * This class expects the polygon to be already changed, and takes the previous
+ * polygon in the constructor.
+ */
+class ChangePolygon : public QUndoCommand
 {
-    Q_OBJECT
-
 public:
-    SelectionTool(QObject *parent = 0);
+    ChangePolygon(MapDocument *mapDocument,
+                  MapObject *mapObject,
+                  const QPolygonF &oldPolygon);
 
-    void mousePressed(QGraphicsSceneMouseEvent *event);
-    void mouseReleased(QGraphicsSceneMouseEvent *event);
-
-    void languageChanged();
-
-protected:
-    void tilePositionChanged(const QPoint &tilePos);
-
-    void updateStatusInfo();
+    void undo();
+    void redo();
 
 private:
-    enum SelectionMode {
-        Replace,
-        Add,
-        Subtract,
-        Intersect
-    };
+    MapDocument *mMapDocument;
+    MapObject *mMapObject;
 
-    QRect selectedArea() const;
-
-    QPoint mSelectionStart;
-    SelectionMode mSelectionMode;
-    bool mSelecting;
+    QPolygonF mOldPolygon;
+    QPolygonF mNewPolygon;
 };
 
 } // namespace Internal
 } // namespace Tiled
 
-#endif // SELECTIONTOOL_H
+#endif // CHANGEPOLYGON_H

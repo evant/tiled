@@ -1,6 +1,6 @@
 /*
  * preferences.cpp
- * Copyright 2009-2010, Thorbjørn Lindeijer <thorbjorn@lindeijer.nl>
+ * Copyright 2009-2011, Thorbjørn Lindeijer <thorbjorn@lindeijer.nl>
  *
  * This file is part of Tiled.
  *
@@ -20,9 +20,12 @@
 
 #include "preferences.h"
 
+#include "documentmanager.h"
 #include "languagemanager.h"
 #include "tilesetmanager.h"
 
+#include <QDesktopServices>
+#include <QFileInfo>
 #include <QSettings>
 
 using namespace Tiled;
@@ -61,10 +64,26 @@ Preferences::Preferences()
     mShowGrid = mSettings->value(QLatin1String("ShowGrid"), false).toBool();
     mSnapToGrid = mSettings->value(QLatin1String("SnapToGrid"),
                                    false).toBool();
+    mHighlightCurrentLayer = mSettings->value(QLatin1String("HighlightCurrentLayer"),
+                                              false).toBool();
+    mShowTilesetGrid = mSettings->value(QLatin1String("ShowTilesetGrid"),
+                                        true).toBool();
     mLanguage = mSettings->value(QLatin1String("Language"),
                                  QString()).toString();
     mUseOpenGL = mSettings->value(QLatin1String("OpenGL"), false).toBool();
     mSettings->endGroup();
+
+    // Retrieve defined object types
+    mSettings->beginGroup(QLatin1String("ObjectTypes"));
+    const QStringList names =
+            mSettings->value(QLatin1String("Names")).toStringList();
+    const QStringList colors =
+            mSettings->value(QLatin1String("Colors")).toStringList();
+    mSettings->endGroup();
+
+    const int count = qMin(names.size(), colors.size());
+    for (int i = 0; i < count; ++i)
+        mObjectTypes.append(ObjectType(names.at(i), QColor(colors.at(i))));
 
     TilesetManager *tilesetManager = TilesetManager::instance();
     tilesetManager->setReloadTilesetsOnChange(mReloadTilesetsOnChange);
@@ -93,6 +112,28 @@ void Preferences::setSnapToGrid(bool snapToGrid)
     mSnapToGrid = snapToGrid;
     mSettings->setValue(QLatin1String("Interface/SnapToGrid"), mSnapToGrid);
     emit snapToGridChanged(mSnapToGrid);
+}
+
+void Preferences::setHighlightCurrentLayer(bool highlight)
+{
+    if (mHighlightCurrentLayer == highlight)
+        return;
+
+    mHighlightCurrentLayer = highlight;
+    mSettings->setValue(QLatin1String("Interface/HighlightCurrentLayer"),
+                        mHighlightCurrentLayer);
+    emit highlightCurrentLayerChanged(mHighlightCurrentLayer);
+}
+
+void Preferences::setShowTilesetGrid(bool showTilesetGrid)
+{
+    if (mShowTilesetGrid == showTilesetGrid)
+        return;
+
+    mShowTilesetGrid = showTilesetGrid;
+    mSettings->setValue(QLatin1String("Interface/ShowTilesetGrid"),
+                        mShowTilesetGrid);
+    emit showTilesetGridChanged(mShowTilesetGrid);
 }
 
 MapWriter::LayerDataFormat Preferences::layerDataFormat() const
@@ -166,4 +207,73 @@ void Preferences::setUseOpenGL(bool useOpenGL)
     mSettings->setValue(QLatin1String("Interface/OpenGL"), mUseOpenGL);
 
     emit useOpenGLChanged(mUseOpenGL);
+}
+
+void Preferences::setObjectTypes(const ObjectTypes &objectTypes)
+{
+    mObjectTypes = objectTypes;
+
+    QStringList names;
+    QStringList colors;
+    foreach (const ObjectType &objectType, objectTypes) {
+        names.append(objectType.name);
+        colors.append(objectType.color.name());
+    }
+
+    mSettings->beginGroup(QLatin1String("ObjectTypes"));
+    mSettings->setValue(QLatin1String("Names"), names);
+    mSettings->setValue(QLatin1String("Colors"), colors);
+    mSettings->endGroup();
+
+    emit objectTypesChanged();
+}
+
+static QString lastPathKey(Preferences::FileType fileType)
+{
+    QString key = QLatin1String("LastPaths/");
+
+    switch (fileType) {
+    case Preferences::ObjectTypesFile:
+        key.append(QLatin1String("ObjectTypes"));
+        break;
+    default:
+        Q_ASSERT(false); // Getting here means invalid file type
+    }
+
+    return key;
+}
+
+/**
+ * Returns the last location of a file chooser for the given file type. As long
+ * as it was set using setLastPath().
+ *
+ * When no last path for this file type exists yet, the path of the currently
+ * selected map is returned.
+ *
+ * When no map is open, the user's 'Documents' folder is returned.
+ */
+QString Preferences::lastPath(FileType fileType) const
+{
+    QString path = mSettings->value(lastPathKey(fileType)).toString();
+
+    if (path.isEmpty()) {
+        DocumentManager *documentManager = DocumentManager::instance();
+        MapDocument *mapDocument = documentManager->currentDocument();
+        if (mapDocument)
+            path = QFileInfo(mapDocument->fileName()).path();
+    }
+
+    if (path.isEmpty())
+        path = QDesktopServices::storageLocation(
+                    QDesktopServices::DocumentsLocation);
+
+    return path;
+}
+
+/**
+ * \see lastPath()
+ */
+void Preferences::setLastPath(FileType fileType, const QString &path)
+{
+    mSettings->setValue(lastPathKey(fileType), path);
 }

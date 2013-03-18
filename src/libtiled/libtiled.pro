@@ -12,8 +12,13 @@ macx {
 }
 DLLDESTDIR = ../..
 
-win32:INCLUDEPATH += $$(QTDIR)/src/3rdparty/zlib
-else:LIBS += -lz
+win32 {
+    # It is enough to include zlib, since the symbols are available in Qt
+    INCLUDEPATH += ../zlib
+} else {
+    # On other platforms it is necessary to link to zlib explicitly
+    LIBS += -lz
+}
 
 DEFINES += QT_NO_CAST_FROM_ASCII \
     QT_NO_CAST_TO_ASCII
@@ -27,6 +32,7 @@ SOURCES += compression.cpp \
     map.cpp \
     mapobject.cpp \
     mapreader.cpp \
+    maprenderer.cpp \
     mapwriter.cpp \
     objectgroup.cpp \
     orthogonalrenderer.cpp \

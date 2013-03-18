@@ -17,6 +17,7 @@ DEFINES += QT_NO_CAST_FROM_ASCII \
 
 macx {
     QMAKE_LIBDIR_FLAGS += -L$$OUT_PWD/../../bin/Tiled.app/Contents/Frameworks
+    LIBS += -framework Foundation
 } else:win32 {
     LIBS += -L$$OUT_PWD/../../lib
 } else {
@@ -38,7 +39,9 @@ RCC_DIR = .rcc
 OBJECTS_DIR = .obj
 
 SOURCES += aboutdialog.cpp \
-    automap.cpp \
+    automapper.cpp \
+    automapperwrapper.cpp \
+    automappingmanager.cpp \
     brushitem.cpp \
     documentmanager.cpp \
     filesystemwatcher.cpp \
@@ -93,7 +96,7 @@ SOURCES += aboutdialog.cpp \
     utils.cpp \
     colorbutton.cpp \
     undodock.cpp \
-    selectiontool.cpp \
+    tileselectiontool.cpp \
     abstracttiletool.cpp \
     abstracttool.cpp \
     changetileselection.cpp \
@@ -115,10 +118,18 @@ SOURCES += aboutdialog.cpp \
     commanddialog.cpp \
     tiledapplication.cpp \
     command.cpp \
-    abstractobjecttool.cpp
+    abstractobjecttool.cpp \
+    changepolygon.cpp \
+    editpolygontool.cpp \
+    selectionrectangle.cpp \
+    objecttypes.cpp \
+    objecttypesmodel.cpp \
+    commandlineparser.cpp
 
 HEADERS += aboutdialog.h \
-    automap.h \
+    automapper.h \
+    automapperwrapper.h \
+    automappingmanager.h \
     brushitem.h \
     documentmanager.h \
     filesystemwatcher.h \
@@ -175,7 +186,7 @@ HEADERS += aboutdialog.h \
     utils.h \
     colorbutton.h \
     undodock.h \
-    selectiontool.h \
+    tileselectiontool.h \
     abstracttiletool.h \
     changetileselection.h \
     clipboardmanager.h \
@@ -197,7 +208,20 @@ HEADERS += aboutdialog.h \
     commandbutton.h \
     tiledapplication.h \
     command.h \
-    abstractobjecttool.h
+    abstractobjecttool.h \
+    changepolygon.h \
+    editpolygontool.h \
+    selectionrectangle.h \
+    rangeset.h \
+    objecttypes.h \
+    objecttypesmodel.h \
+    commandlineparser.h \
+    macsupport.h
+
+macx {
+    OBJECTIVE_SOURCES += macsupport.mm
+}
+
 
 FORMS += aboutdialog.ui \
     mainwindow.ui \

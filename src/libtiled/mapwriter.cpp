@@ -157,24 +157,10 @@ void MapWriterPrivate::writeMap(QXmlStreamWriter &w, const Map *map)
 {
     w.writeStartElement(QLatin1String("map"));
 
-    QString orientation;
-    switch (map->orientation()) {
-    case Map::Orthogonal:
-        orientation = QLatin1String("orthogonal");
-        break;
-    case Map::Isometric:
-        orientation = QLatin1String("isometric");
-        break;
-    case Map::Hexagonal:
-        orientation = QLatin1String("hexagonal");
-        break;
-    case Map::Unknown:
-        break;
-    }
+    const QString orientation = orientationToString(map->orientation());
 
     w.writeAttribute(QLatin1String("version"), QLatin1String("1.0"));
-    if (!orientation.isEmpty())
-        w.writeAttribute(QLatin1String("orientation"), orientation);
+    w.writeAttribute(QLatin1String("orientation"), orientation);
     w.writeAttribute(QLatin1String("width"), QString::number(map->width()));
     w.writeAttribute(QLatin1String("height"), QString::number(map->height()));
     w.writeAttribute(QLatin1String("tilewidth"),
@@ -233,6 +219,17 @@ void MapWriterPrivate::writeTileset(QXmlStreamWriter &w, const Tileset *tileset,
                          QString::number(tileSpacing));
     if (margin != 0)
         w.writeAttribute(QLatin1String("margin"), QString::number(margin));
+
+    const QPoint offset = tileset->tileOffset();
+    if (!offset.isNull()) {
+        w.writeStartElement(QLatin1String("tileoffset"));
+        w.writeAttribute(QLatin1String("x"), QString::number(offset.x()));
+        w.writeAttribute(QLatin1String("y"), QString::number(offset.y()));
+        w.writeEndElement();
+    }
+
+    // Write the tileset properties
+    writeProperties(w, tileset->properties());
 
     // Write the image element
     const QString &imageSource = tileset->imageSource();
@@ -393,6 +390,33 @@ void MapWriterPrivate::writeObjectGroup(QXmlStreamWriter &w,
     w.writeEndElement();
 }
 
+class TileToPixelCoordinates
+{
+public:
+    TileToPixelCoordinates(Map *map)
+    {
+        if (map->orientation() == Map::Isometric) {
+            // Isometric needs special handling, since the pixel values are
+            // based solely on the tile height.
+            mMultiplierX = map->tileHeight();
+            mMultiplierY = map->tileHeight();
+        } else {
+            mMultiplierX = map->tileWidth();
+            mMultiplierY = map->tileHeight();
+        }
+    }
+
+    QPoint operator() (qreal x, qreal y) const
+    {
+        return QPoint(qRound(x * mMultiplierX),
+                      qRound(y * mMultiplierY));
+    }
+
+private:
+    int mMultiplierX;
+    int mMultiplierY;
+};
+
 void MapWriterPrivate::writeObject(QXmlStreamWriter &w,
                                    const MapObject *mapObject)
 {
@@ -411,35 +435,41 @@ void MapWriterPrivate::writeObject(QXmlStreamWriter &w,
 
     // Convert from tile to pixel coordinates
     const ObjectGroup *objectGroup = mapObject->objectGroup();
-    const Map *map = objectGroup->map();
-    const int tileHeight = map->tileHeight();
-    const int tileWidth = map->tileWidth();
-    const QRectF bounds = mapObject->bounds();
+    const TileToPixelCoordinates toPixel(objectGroup->map());
 
-    int x, y, width, height;
+    QPoint pos = toPixel(mapObject->x(), mapObject->y());
+    QPoint size = toPixel(mapObject->width(), mapObject->height());
 
-    if (map->orientation() == Map::Isometric) {
-        // Isometric needs special handling, since the pixel values are based
-        // solely on the tile height.
-        x = qRound(bounds.x() * tileHeight);
-        y = qRound(bounds.y() * tileHeight);
-        width = qRound(bounds.width() * tileHeight);
-        height = qRound(bounds.height() * tileHeight);
-    } else {
-        x = qRound(bounds.x() * tileWidth);
-        y = qRound(bounds.y() * tileHeight);
-        width = qRound(bounds.width() * tileWidth);
-        height = qRound(bounds.height() * tileHeight);
+    w.writeAttribute(QLatin1String("x"), QString::number(pos.x()));
+    w.writeAttribute(QLatin1String("y"), QString::number(pos.y()));
+
+    if (size.x() != 0)
+        w.writeAttribute(QLatin1String("width"), QString::number(size.x()));
+    if (size.y() != 0)
+        w.writeAttribute(QLatin1String("height"), QString::number(size.y()));
+
+    writeProperties(w, mapObject->properties());
+
+    const QPolygonF &polygon = mapObject->polygon();
+    if (!polygon.isEmpty()) {
+        if (mapObject->shape() == MapObject::Polygon)
+            w.writeStartElement(QLatin1String("polygon"));
+        else
+            w.writeStartElement(QLatin1String("polyline"));
+
+        QString points;
+        foreach (const QPointF &point, polygon) {
+            const QPoint pos = toPixel(point.x(), point.y());
+            points.append(QString::number(pos.x()));
+            points.append(QLatin1Char(','));
+            points.append(QString::number(pos.y()));
+            points.append(QLatin1Char(' '));
+        }
+        points.chop(1);
+        w.writeAttribute(QLatin1String("points"), points);
+        w.writeEndElement();
     }
 
-    w.writeAttribute(QLatin1String("x"), QString::number(x));
-    w.writeAttribute(QLatin1String("y"), QString::number(y));
-
-    if (width != 0)
-        w.writeAttribute(QLatin1String("width"), QString::number(width));
-    if (height != 0)
-        w.writeAttribute(QLatin1String("height"), QString::number(height));
-    writeProperties(w, mapObject->properties());
     w.writeEndElement();
 }
 

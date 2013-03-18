@@ -1,6 +1,7 @@
 /*
  * mapdocumentactionhandler.cpp
  * Copyright 2010, Thorbjørn Lindeijer <thorbjorn@lindeijer.nl>
+ * Copyright 2011, Stefan Beller <stefanbeller@googlemail.com
  *
  * This file is part of Tiled.
  *
@@ -21,12 +22,18 @@
 #include "mapdocumentactionhandler.h"
 
 #include "changetileselection.h"
+#include "documentmanager.h"
 #include "layer.h"
 #include "map.h"
 #include "mapdocument.h"
+#include "maprenderer.h"
 #include "utils.h"
 
 #include <QAction>
+#include <QApplication>
+#include <QClipboard>
+#include <QCursor>
+#include <QtCore/qmath.h>
 
 using namespace Tiled;
 using namespace Tiled::Internal;
@@ -60,6 +67,9 @@ MapDocumentActionHandler::MapDocumentActionHandler(QObject *parent)
     mActionRemoveLayer = new QAction(this);
     mActionRemoveLayer->setIcon(
             QIcon(QLatin1String(":/images/16x16/edit-delete.png")));
+
+    mActionRenameLayer = new QAction(this);
+    mActionRenameLayer->setShortcut(tr("F2"));
 
     mActionSelectPreviousLayer = new QAction(this);
     mActionSelectPreviousLayer->setShortcut(tr("PgUp"));
@@ -106,6 +116,7 @@ MapDocumentActionHandler::MapDocumentActionHandler(QObject *parent)
             SLOT(selectPreviousLayer()));
     connect(mActionSelectNextLayer, SIGNAL(triggered()),
             SLOT(selectNextLayer()));
+    connect(mActionRenameLayer, SIGNAL(triggered()), SLOT(renameLayer()));
     connect(mActionRemoveLayer, SIGNAL(triggered()), SLOT(removeLayer()));
     connect(mActionMoveLayerUp, SIGNAL(triggered()), SLOT(moveLayerUp()));
     connect(mActionMoveLayerDown, SIGNAL(triggered()), SLOT(moveLayerDown()));
@@ -133,6 +144,7 @@ void MapDocumentActionHandler::retranslateUi()
     mActionDuplicateLayer->setText(tr("&Duplicate Layer"));
     mActionMergeLayerDown->setText(tr("&Merge Layer Down"));
     mActionRemoveLayer->setText(tr("&Remove Layer"));
+    mActionRenameLayer->setText(tr("Re&name Layer"));
     mActionSelectPreviousLayer->setText(tr("Select Pre&vious Layer"));
     mActionSelectNextLayer->setText(tr("Select &Next Layer"));
     mActionMoveLayerUp->setText(tr("R&aise Layer"));
@@ -186,6 +198,26 @@ void MapDocumentActionHandler::selectNone()
 
     QUndoCommand *command = new ChangeTileSelection(mMapDocument, QRegion());
     mMapDocument->undoStack()->push(command);
+}
+
+void MapDocumentActionHandler::copyPosition()
+{
+    const MapView *view = DocumentManager::instance()->currentMapView();
+    if (!view)
+        return;
+
+    const QPoint globalPos = QCursor::pos();
+    const QPoint viewportPos = view->viewport()->mapFromGlobal(globalPos);
+    const QPointF scenePos = view->mapToScene(viewportPos);
+
+    const MapRenderer *renderer = mapDocument()->renderer();
+    const QPointF tilePos = renderer->pixelToTileCoords(scenePos);
+    const int x = qFloor(tilePos.x());
+    const int y = qFloor(tilePos.y());
+
+    QApplication::clipboard()->setText(QString::number(x) +
+                                       QLatin1String(", ") +
+                                       QString::number(y));
 }
 
 void MapDocumentActionHandler::cropToSelection()
@@ -260,6 +292,12 @@ void MapDocumentActionHandler::removeLayer()
         mMapDocument->removeLayer(mMapDocument->currentLayerIndex());
 }
 
+void MapDocumentActionHandler::renameLayer()
+{
+    if (mMapDocument)
+        mMapDocument->emitEditLayerNameRequested();
+}
+
 void MapDocumentActionHandler::toggleOtherLayers()
 {
     if (mMapDocument)
@@ -306,5 +344,6 @@ void MapDocumentActionHandler::updateActions()
     mActionMoveLayerDown->setEnabled(hasNextLayer);
     mActionToggleOtherLayers->setEnabled(layerCount > 1);
     mActionRemoveLayer->setEnabled(currentLayerIndex >= 0);
+    mActionRenameLayer->setEnabled(currentLayerIndex >= 0);
     mActionLayerProperties->setEnabled(currentLayerIndex >= 0);
 }

@@ -1,6 +1,6 @@
 /*
- * automap.h
- * Copyright 2010, Stefan Beller, stefanbeller@googlemail.com
+ * automapper.h
+ * Copyright 2010-2011, Stefan Beller, stefanbeller@googlemail.com
  *
  * This file is part of Tiled.
  *
@@ -18,25 +18,19 @@
  * this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef AUTOMAP_H
-#define AUTOMAP_H
+#ifndef AUTOMAPPER_H
+#define AUTOMAPPER_H
 
 #include <QList>
 #include <QPair>
 #include <QRegion>
+
 #include <QSet>
 #include <QString>
-#include <QStringList>
-#include <QTimer>
-#include <QUndoCommand>
 #include <QVector>
-
-class QFileSystemWatcher;
-class QObject;
 
 namespace Tiled {
 
-class Layer;
 class Map;
 class TileLayer;
 class Tileset;
@@ -44,6 +38,8 @@ class Tileset;
 namespace Internal {
 
 class MapDocument;
+
+typedef QMap<TileLayer*, int> IndexByTileLayer;
 
 /**
  * This class does all the work for the automapping feature.
@@ -87,7 +83,8 @@ public:
     /**
      * This needs to be called directly before the autoMap call.
      * It sets up some data structures which change rapidly, so it is quite
-     * painful to keep these datastructures up to date all time.
+     * painful to keep these datastructures up to date all time. (indices of
+     * layers of the working map)
      */
     bool prepareAutoMap();
 
@@ -102,7 +99,18 @@ public:
      */
     void cleanAll();
 
+    /**
+     * Contains all errors until operation was canceled.
+     * The errorlist is cleared within prepareLoad and prepareAutoMap.
+     */
     QString errorString() const { return mError; }
+
+    /**
+     * Contains all warnings which occur at loading a rules map or while
+     * automapping.
+     * The errorlist is cleared within prepareLoad and prepareAutoMap.
+     */
+    QString warningString() const { return mWarning; }
 
 private:
     /**
@@ -138,7 +146,13 @@ private:
      * @return returns true when anything is ok, false when errors occured.
      *        (in that case will be a msg box anyway)
      */
-    bool setupRuleMapLayers();
+    bool setupRuleMapTileLayers();
+
+    /**
+     * Checks if all needed layers in the working map are there.
+     * If not, add them in the correct order.
+     */
+    bool setupMissingLayers();
 
     /**
      * Checks if the layers setup as in setupRuleMapLayers are still right.
@@ -146,7 +160,7 @@ private:
      * @return returns true if everything went fine. false is returned when
      *         no set layer was found
      */
-    bool setupMissingLayers();
+    bool setupCorrectIndexes();
 
     /**
      * sets up the tilesets which are used in automapping.
@@ -184,7 +198,7 @@ private:
      * In the destination it will come to the region translated by Offset.
      */
     void copyMapRegion(const QRegion &region, QPoint Offset,
-            const QList< QPair<TileLayer*, int> > &LayerTranslation);
+                       const IndexByTileLayer *LayerTranslation);
 
     /**
      * This goes through all the positions of the mMapWork and checks if
@@ -212,19 +226,25 @@ private:
     QRegion createRule(int x, int y) const;
 
     /**
-     * cleans up the data structes filled by setupRuleMapLayers(),
+     * Cleans up the data structes filled by setupRuleMapLayers(),
      * so the next rule can be processed.
      */
     void cleanUpRuleMapLayers();
 
     /**
-     * cleans up the data structes filled by setupTilesets(),
+     * Cleans up the data structes filled by setupTilesets(),
      * so the next rule can be processed.
      */
     void cleanTilesets();
 
     /**
-     * checks if this the rules from the given rules map could be used anyway
+     * Cleans up the added tile layers setup by setupMissingLayers(),
+     * so we have a minimal addition of tile layers by the automapping.
+     */
+    void cleanTileLayers();
+
+    /**
+     * Checks if this the rules from the given rules map could be used anyway
      * by comparing the used tilesets of the set layer and ruleset layer.
      */
     bool setupRulesUsedCheck();
@@ -293,19 +313,19 @@ private:
     QList<QRegion> mRules;
 
     /**
-     * The inner List of Tuples with layers is needed for translating
+     * The inner set with layers to indexes is needed for translating
      * tile layers from mMapRules to mMapWork.
      *
-     * QPairs first entry is the  pointer to the layer in the rulemap. The
+     * The key is the pointer to the layer in the rulemap. The
      * pointer to the layer within the working map is not hardwired, but the
      * position in the layerlist, where it was found the last time.
      * This loosely bound pointer ensures we will get the right layer, since we
      * need to check before anyway, and it is still fast.
      *
-     * The outer list is used to hold different translation tables
-     * => one of the inner lists is chosen by chance, so randomness is available
+     * The list is used to hold different translation tables
+     * => one of the tables is chosen by chance, so randomness is available
      */
-    QList<QList<QPair<TileLayer*, int> >* > mLayerList;
+    QList<IndexByTileLayer*> mLayerList;
 
     /**
      * store the name of the processed rules file, to have detailed
@@ -327,163 +347,19 @@ private:
      */
     int mAutoMappingRadius;
 
-    QSet<QString> mTouchedLayers;
-
-    QString mError;
-};
-
-/**
- * This is a wrapper class for the AutoMapper class.
- * Here in this class only undo/redo functionality for one rulemap
- * is provided.
- * This class will take a snapshot of the layers before and after the
- * automapping is done. In between instances of AutoMapper are doing the work.
- */
-
-class AutoMapperWrapper : public QUndoCommand
-{
-public:
-    AutoMapperWrapper(MapDocument *mapDocument, QVector<AutoMapper*> autoMapper,
-                      QRegion *where);
-    ~AutoMapperWrapper();
-
-    void undo();
-    void redo();
-
-private:
-    void patchLayer(int layerIndex, TileLayer *layer);
-
-    MapDocument *mMapDocument;
-    QVector<TileLayer*> mLayersAfter;
-    QVector<TileLayer*> mLayersBefore;
-};
-
-/**
- * This class is a superior class to the AutoMapper and AutoMapperWrapper class.
- * It uses these classes to do the whole automapping process.
- */
-class AutomaticMappingManager: public QObject
-{
-    Q_OBJECT
-
-public:
     /**
-     * Requests the AutomaticMapping manager. When the manager doesn't exist
-     * yet, it will be created.
+     * Determines if a rule is allowed to overlap itself.
      */
-    static AutomaticMappingManager *instance();
+    bool mNoOverlappingRules;
 
-    /**
-     * Deletes the AutomaticMapping manager instance, when it exists.
-     */
-    static void deleteInstance();
-
-    /**
-     * This triggers an automapping on the whole current map document.
-     */
-    void automap();
-
-    void setMapDocument(MapDocument *mapDocument);
-
-    QString errorString() const { return mError; }
-
-public slots:
-    /**
-     * This sets up new AutoMapperWrappers, which trigger the automapping.
-     * The region 'where' describes where only the automapping takes place.
-     * This is a signal so it can directly be connected to the regionEdited
-     * signal of map documents.
-     */
-    void automap(QRegion where, Layer *layer);
-
-private slots:
-    /**
-     * connected to the QFileWatcher, which monitors all rules files for changes
-     */
-    void fileChanged(const QString &path);
-
-    /**
-     * This is connected to the timer, which fires once after the files changed.
-     */
-    void fileChangedTimeout();
-
-private:
-    Q_DISABLE_COPY(AutomaticMappingManager)
-
-    /**
-     * Constructor. Only used by the AutomaticMapping manager itself.
-     */
-    AutomaticMappingManager(QObject *parent);
-
-    ~AutomaticMappingManager();
-
-    static AutomaticMappingManager *mInstance;
-
-    /**
-     * This function parses a rules file.
-     * For each path which is a rule, (fileextension is tmx) an AutoMapper
-     * object is setup.
-     *
-     * If a fileextension is txt, this file will be opened and searched for
-     * rules again.
-     *
-     * @return if the loading was successful: return true if it suceeded.
-     */
-    bool loadFile(const QString &filePath);
-
-    /**
-     * deletes all its data structures
-     */
-    void cleanUp();
-
-    /**
-     * The current map document.
-     */
-    MapDocument *mMapDocument;
-
-    /**
-     * For each new file of rules a new AutoMapper is setup. In this vector we
-     * can store all of the AutoMappers in order.
-     */
-    QVector<AutoMapper*> mAutoMappers;
-
-    /**
-     * This tells you if the rules for the current map document were already
-     * loaded.
-     */
-    bool mLoaded;
-
-    /**
-     * The all used rulefiles are monitored by this object, so in case of
-     * external changes it will automatically reloaded.
-     */
-    QFileSystemWatcher *mWatcher;
-
-    /**
-     * All external changed files will be put in here, so these will be loaded
-     * altogether when the timer expires.
-     */
-    QSet<QString> mChangedFiles;
-
-    /**
-     * This timer is started when the first file was modified. The files are
-     * actually reloaded after this timer expires, so just in case the files
-     * get modified within short time delays (some editors do so), it will
-     * wait until all is over an reload everything at the timeout.
-     */
-    QTimer mChangedFilesTimer;
+    QList<QString> mTouchedLayers;
 
     QString mError;
 
-    /**
-     * This stores the name of the layer, which is used in the working map to
-     * setup the automapper.
-     * Until this variable was introduced it was called "set" (hardcoded)
-     */
-    QString mSetLayer;
+    QString mWarning;
 };
 
 } // namespace Internal
 } // namespace Tiled
 
-#endif // AUTOMAP_H
+#endif // AUTOMAPPER_H

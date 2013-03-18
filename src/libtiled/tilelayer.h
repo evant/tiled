@@ -34,6 +34,7 @@
 
 #include "layer.h"
 
+#include <QMargins>
 #include <QString>
 #include <QVector>
 
@@ -51,13 +52,15 @@ public:
     Cell() :
         tile(0),
         flippedHorizontally(false),
-        flippedVertically(false)
+        flippedVertically(false),
+        flippedAntiDiagonally(false)
     {}
 
     explicit Cell(Tile *tile) :
         tile(tile),
         flippedHorizontally(false),
-        flippedVertically(false)
+        flippedVertically(false),
+        flippedAntiDiagonally(false)
     {}
 
     bool isEmpty() const { return tile == 0; }
@@ -66,19 +69,22 @@ public:
     {
         return tile == other.tile
                 && flippedHorizontally == other.flippedHorizontally
-                && flippedVertically == other.flippedVertically;
+                && flippedVertically == other.flippedVertically
+                && flippedAntiDiagonally == other.flippedAntiDiagonally;
     }
 
     bool operator != (const Cell &other) const
     {
         return tile != other.tile
                 || flippedHorizontally != other.flippedHorizontally
-                || flippedVertically != other.flippedVertically;
+                || flippedVertically != other.flippedVertically
+                || flippedAntiDiagonally != other.flippedAntiDiagonally;
     }
 
     Tile *tile;
     bool flippedHorizontally;
     bool flippedVertically;
+    bool flippedAntiDiagonally;
 };
 
 /**
@@ -93,7 +99,13 @@ class TILEDSHARED_EXPORT TileLayer : public Layer
 public:
     enum FlipDirection {
         FlipHorizontally,
-        FlipVertically
+        FlipVertically,
+        FlipDiagonally
+    };
+
+    enum RotateDirection {
+        RotateLeft,
+        RotateRight
     };
 
     /**
@@ -102,10 +114,23 @@ public:
     TileLayer(const QString &name, int x, int y, int width, int height);
 
     /**
-     * Returns the maximum tile size of this layer. Used by the layer
-     * rendering code to determine the area that needs to be redrawn.
+     * Returns the maximum tile size of this layer.
      */
     QSize maxTileSize() const { return mMaxTileSize; }
+
+    /**
+     * Returns the margins that have to be taken into account while drawing
+     * this tile layer. The margins depend on the maximum tile size and the
+     * offset applied to the tiles.
+     */
+    QMargins drawMargins() const
+    {
+        return QMargins(mOffsetMargins.left(),
+                        mOffsetMargins.top() + mMaxTileSize.height(),
+                        mOffsetMargins.right() + mMaxTileSize.width(),
+                        mOffsetMargins.bottom());
+    }
+
 
     /**
      * Returns whether (x, y) is inside this map layer.
@@ -164,10 +189,18 @@ public:
                   const QRegion &mask = QRegion());
 
     /**
-     * Flip this tile layer in the given \a direction. This doesn't change the
-     * dimensions of the tile layer.
+     * Flip this tile layer in the given \a direction. Direction must be
+     * horizontal or vertical. This doesn't change the dimensions of the
+     * tile layer.
      */
     void flip(FlipDirection direction);
+
+    /**
+     * Rotate this tile layer by 90 degrees left or right. The tile positions
+     * are rotated within the layer, and the tiles themselves are rotated. The
+     * dimensions of the tile layer are swapped.
+     */
+    void rotate(RotateDirection direction);
 
     /**
      * Computes and returns the set of tilesets used by this tile layer.
@@ -237,6 +270,7 @@ protected:
 
 private:
     QSize mMaxTileSize;
+    QMargins mOffsetMargins;
     QVector<Cell> mGrid;
 };
 

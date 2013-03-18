@@ -1,6 +1,6 @@
 /*
  * mapscene.h
- * Copyright 2008-2010, Thorbjørn Lindeijer <thorbjorn@lindeijer.nl>
+ * Copyright 2008-2011, Thorbjørn Lindeijer <thorbjorn@lindeijer.nl>
  * Copyright 2008, Roderic Morris <roderic@ccs.neu.edu>
  * Copyright 2009, Edward Hutchins <eah1@yahoo.com>
  * Copyright 2010, Jeff Bland <jksb@member.fsf.org>
@@ -76,13 +76,6 @@ public:
     bool isGridVisible() const { return mGridVisible; }
 
     /**
-     * Returns the selected object group item, or 0 if no object group is
-     * selected.
-     */
-    ObjectGroupItem *selectedObjectGroupItem() const
-    { return mSelectedObjectGroupItem; }
-
-    /**
      * Returns the set of selected map object items.
      */
     const QSet<MapObjectItem*> &selectedObjectItems() const
@@ -93,6 +86,12 @@ public:
      * MapDocument::setSelectedObjects.
      */
     void setSelectedObjectItems(const QSet<MapObjectItem*> &items);
+
+    /**
+     * Returns the MapObjectItem associated with the given \a mapObject.
+     */
+    MapObjectItem *itemForObject(MapObject *object) const
+    { return mObjectItems.value(object); }
 
     /**
      * Enables the selected tool at this map scene.
@@ -106,11 +105,19 @@ public:
      */
     void setSelectedTool(AbstractTool *tool);
 
+signals:
+    void selectedObjectItemsChanged();
+
 public slots:
     /**
      * Sets whether the tile grid is visible.
      */
     void setGridVisible(bool visible);
+
+    /**
+     * Sets whether the current layer should be highlighted.
+     */
+    void setHighlightCurrentLayer(bool highlightCurrentLayer);
 
 protected:
     /**
@@ -154,23 +161,25 @@ private slots:
     void objectsChanged(const QList<MapObject*> &objects);
 
     void updateSelectedObjectItems();
+    void syncAllObjectItems();
 
 private:
     QGraphicsItem *createLayerItem(Layer *layer);
 
-    void updateInteractionMode();
+    void updateCurrentLayerHighlight();
 
     bool eventFilter(QObject *object, QEvent *event);
 
     MapDocument *mMapDocument;
-    ObjectGroupItem *mSelectedObjectGroupItem;
     AbstractTool *mSelectedTool;
     AbstractTool *mActiveTool;
     bool mGridVisible;
+    bool mHighlightCurrentLayer;
     bool mUnderMouse;
     Qt::KeyboardModifiers mCurrentModifiers;
     QPointF mLastMousePos;
     QVector<QGraphicsItem*> mLayerItems;
+    QGraphicsRectItem *mDarkRectangle;
 
     typedef QMap<MapObject*, MapObjectItem*> ObjectItems;
     ObjectItems mObjectItems;

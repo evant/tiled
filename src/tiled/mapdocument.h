@@ -2,6 +2,7 @@
  * mapdocument.h
  * Copyright 2008-2010, Thorbjørn Lindeijer <thorbjorn@lindeijer.nl>
  * Copyright 2009, Jeff Bland <jeff@teamphobic.com>
+ * Copyright 2011, Stefan Beller <stefanbeller@googlemail.com
  *
  * This file is part of Tiled.
  *
@@ -147,6 +148,8 @@ public:
     void insertTileset(int index, Tileset *tileset);
     void removeTilesetAt(int index);
     void moveTileset(int from, int to);
+    void setTilesetFileName(Tileset *tileset, const QString &fileName);
+    void setTilesetName(Tileset *tileset, const QString &name);
 
     /**
      * Returns the layer model. Can be used to modify the layer stack of the
@@ -228,6 +231,12 @@ public:
     inline void emitObjectChanged(MapObject *object)
     { emitObjectsChanged(QList<MapObject*>() << object); }
 
+    /**
+     * Emits the editLayerNameRequested signal, to get renamed.
+     */
+    inline void emitEditLayerNameRequested()
+    { emit editLayerNameRequested(); }
+
 signals:
     void fileNameChanged();
     void modifiedChanged();
@@ -280,6 +289,8 @@ signals:
     void tilesetAdded(int index, Tileset *tileset);
     void tilesetRemoved(Tileset *tileset);
     void tilesetMoved(int from, int to);
+    void tilesetFileNameChanged(Tileset *tileset);
+    void tilesetNameChanged(Tileset *tileset);
 
     void objectsAdded(const QList<MapObject*> &objects);
     void objectsRemoved(const QList<MapObject*> &objects);

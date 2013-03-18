@@ -21,8 +21,10 @@
 #include "newmapdialog.h"
 #include "ui_newmapdialog.h"
 
+#include "isometricrenderer.h"
 #include "map.h"
 #include "mapdocument.h"
+#include "orthogonalrenderer.h"
 #include "preferences.h"
 #include "tilelayer.h"
 
@@ -34,6 +36,7 @@ static const char * const MAP_HEIGHT_KEY = "Map/Height";
 static const char * const TILE_WIDTH_KEY = "Map/TileWidth";
 static const char * const TILE_HEIGHT_KEY = "Map/TileHeight";
 
+using namespace Tiled;
 using namespace Tiled::Internal;
 
 NewMapDialog::NewMapDialog(QWidget *parent) :
@@ -41,6 +44,7 @@ NewMapDialog::NewMapDialog(QWidget *parent) :
     mUi(new Ui::NewMapDialog)
 {
     mUi->setupUi(this);
+    setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
 
     // Restore previously used settings
     QSettings *s = Preferences::instance()->settings();
@@ -56,6 +60,19 @@ NewMapDialog::NewMapDialog(QWidget *parent) :
     mUi->mapHeight->setValue(mapHeight);
     mUi->tileWidth->setValue(tileWidth);
     mUi->tileHeight->setValue(tileHeight);
+
+    // Make the font of the pixel size label smaller
+    QFont font = mUi->pixelSizeLabel->font();
+    const qreal size = QFontInfo(font).pointSizeF();
+    font.setPointSizeF(size - 1);
+    mUi->pixelSizeLabel->setFont(font);
+
+    connect(mUi->mapWidth, SIGNAL(valueChanged(int)), SLOT(refreshPixelSize()));
+    connect(mUi->mapHeight, SIGNAL(valueChanged(int)), SLOT(refreshPixelSize()));
+    connect(mUi->tileWidth, SIGNAL(valueChanged(int)), SLOT(refreshPixelSize()));
+    connect(mUi->tileHeight, SIGNAL(valueChanged(int)), SLOT(refreshPixelSize()));
+    connect(mUi->orientation, SIGNAL(currentIndexChanged(int)), SLOT(refreshPixelSize()));
+    refreshPixelSize();
 }
 
 NewMapDialog::~NewMapDialog()
@@ -89,4 +106,29 @@ MapDocument *NewMapDialog::createMap()
     s->setValue(QLatin1String(TILE_HEIGHT_KEY), tileHeight);
 
     return new MapDocument(map);
+}
+
+void NewMapDialog::refreshPixelSize()
+{
+    const int orientation = mUi->orientation->currentIndex();
+    const Map map((orientation == 0) ? Map::Orthogonal : Map::Isometric,
+                  mUi->mapWidth->value(),
+                  mUi->mapHeight->value(),
+                  mUi->tileWidth->value(),
+                  mUi->tileHeight->value());
+
+    QSize size;
+
+    switch (map.orientation()) {
+    case Map::Isometric:
+        size = IsometricRenderer(&map).mapSize();
+        break;
+    default:
+        size = OrthogonalRenderer(&map).mapSize();
+        break;
+    }
+
+    mUi->pixelSizeLabel->setText(tr("%1 x %2 pixels")
+                                 .arg(size.width())
+                                 .arg(size.height()));
 }

@@ -1,2 +1,7 @@
 TEMPLATE = subdirs
-SUBDIRS = droidcraft lua tmw tengine
+SUBDIRS = flare \
+          droidcraft \
+          json \
+          lua \
+          tengine \
+          tmw

@@ -37,11 +37,14 @@ class CreateObjectTool : public AbstractObjectTool
 
 public:
     enum CreationMode {
-        AreaObjects,
-        TileObjects
+        CreateArea,
+        CreateTile,
+        CreatePolygon,
+        CreatePolyline
     };
 
     CreateObjectTool(CreationMode mode, QObject *parent = 0);
+    ~CreateObjectTool();
 
     void deactivate(MapScene *scene);
 
@@ -67,6 +70,9 @@ private:
     void finishNewMapObject();
 
     MapObjectItem *mNewMapObjectItem;
+    ObjectGroup *mOverlayObjectGroup;
+    MapObject *mOverlayPolygonObject;
+    MapObjectItem *mOverlayPolygonItem;
     Tile *mTile;
     CreationMode mMode;
 };

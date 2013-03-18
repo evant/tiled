@@ -23,9 +23,13 @@
 #define TILESETDOCK_H
 
 #include <QDockWidget>
+#include <QMap>
 
 class QStackedWidget;
-class QTabBar;
+class QComboBox;
+class QToolBar;
+class QAction;
+class QToolButton;
 
 namespace Tiled {
 
@@ -88,25 +92,49 @@ protected:
 
 private slots:
     void insertTilesetView(int index, Tileset *tileset);
+    void updateActions();
     void updateCurrentTiles();
     void tilesetChanged(Tileset *tileset);
     void tilesetRemoved(Tileset *tileset);
     void tilesetMoved(int from, int to);
+    void tilesetNameChanged(Tileset *tileset);
 
+    void removeTileset();
     void removeTileset(int index);
-    void moveTileset(int from, int to);
+
+    void editTilesetProperties();
+    void importTileset();
+    void exportTileset();
+
+    void startNameEdit();
+    void finishNameEdit();
+
+    void documentCloseRequested(int index);
 
 private:
     void setCurrentTile(Tile *tile);
     void setCurrentTiles(TileLayer *tiles);
     void retranslateUi();
+
+    Tileset *currentTileset() const;
     TilesetView *tilesetViewAt(int index) const;
 
     MapDocument *mMapDocument;
-    QTabBar *mTabBar;
+    QComboBox *mDropDown;
     QStackedWidget *mViewStack;
+    QToolBar *mToolBar;
     Tile *mCurrentTile;
     TileLayer *mCurrentTiles;
+    QToolButton *mRenameTileset;
+
+    QAction *mImportTileset;
+    QAction *mExportTileset;
+    QAction *mPropertiesTileset;
+    QAction *mDeleteTileset;
+
+    QMap<MapDocument *, QString> mCurrentTilesets;
+
+    QString mOldName;
 };
 
 } // namespace Internal

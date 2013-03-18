@@ -59,9 +59,7 @@ protected:
 
 private slots:
     void editTileProperties();
-    void exportTileset();
-    void importTileset();
-    void toggleGrid();
+    void setDrawGrid(bool drawGrid);
 
     void adjustScale();
 
@@ -73,5 +71,7 @@ private:
 
 } // namespace Internal
 } // namespace Tiled
+
+Q_DECLARE_METATYPE(Tiled::Internal::TilesetView *)
 
 #endif // TILESETVIEW_H

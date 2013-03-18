@@ -213,7 +213,7 @@ void MapDocument::offsetMap(const QList<int> &layerIndexes,
                                          bounds, wrapX, wrapY));
     } else {
         mUndoStack->beginMacro(tr("Offset Map"));
-        foreach (int layerIndex, layerIndexes) {
+        foreach (const int layerIndex, layerIndexes) {
             mUndoStack->push(new OffsetLayer(this, layerIndex, offset,
                                              bounds, wrapX, wrapY));
         }
@@ -511,10 +511,16 @@ void MapDocument::onLayerAboutToBeRemoved(int index)
 void MapDocument::onLayerRemoved(int index)
 {
     // Bring the current layer index to safety
-    if (mCurrentLayerIndex == mMap->layerCount())
-        setCurrentLayerIndex(mCurrentLayerIndex - 1);
+    bool currentLayerRemoved = mCurrentLayerIndex == mMap->layerCount();
+    if (currentLayerRemoved)
+        mCurrentLayerIndex = mCurrentLayerIndex - 1;
 
     emit layerRemoved(index);
+
+    // Emitted after the layerRemoved signal so that the MapScene has a chance
+    // of synchronizing before adapting to the newly selected index
+    if (currentLayerRemoved)
+        emit currentLayerIndexChanged(mCurrentLayerIndex);
 }
 
 void MapDocument::deselectObjects(const QList<MapObject *> &objects)
@@ -525,4 +531,17 @@ void MapDocument::deselectObjects(const QList<MapObject *> &objects)
 
     if (removedCount > 0)
         emit selectedObjectsChanged();
+}
+
+void MapDocument::setTilesetFileName(Tileset *tileset,
+                                     const QString &fileName)
+{
+    tileset->setFileName(fileName);
+    emit tilesetFileNameChanged(tileset);
+}
+
+void MapDocument::setTilesetName(Tileset *tileset, const QString &name)
+{
+    tileset->setName(name);
+    emit tilesetNameChanged(tileset);
 }

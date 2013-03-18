@@ -20,13 +20,15 @@
 
 #include "zoomable.h"
 
+#include <cmath>
+
 using namespace Tiled::Internal;
 
-static const int zoomFactorCount = 10;
-static const qreal zoomFactors[zoomFactorCount] = {
+static const qreal zoomFactors[] = {
     0.0625,
     0.125,
     0.25,
+    0.33,
     0.5,
     0.75,
     1.0,
@@ -35,6 +37,7 @@ static const qreal zoomFactors[zoomFactorCount] = {
     3.0,
     4.0
 };
+const int zoomFactorCount = sizeof(zoomFactors) / sizeof(zoomFactors[0]);
 
 Zoomable::Zoomable(QObject *parent)
     : QObject(parent)
@@ -59,6 +62,28 @@ bool Zoomable::canZoomIn() const
 bool Zoomable::canZoomOut() const
 {
     return mScale > zoomFactors[0];
+}
+
+void Zoomable::handleWheelDelta(int delta)
+{
+    if (delta <= -120) {
+        zoomOut();
+    } else if (delta >= 120) {
+        zoomIn();
+    } else {
+        // We're dealing with a finer-resolution mouse. Allow it to have finer
+        // control over the zoom level.
+        qreal factor = 1 + 0.3 * qAbs(qreal(delta) / 8 / 15);
+        if (delta < 0)
+            factor = 1 / factor;
+
+        qreal scale = qBound(zoomFactors[0],
+                             mScale * factor,
+                             zoomFactors[zoomFactorCount - 1]);
+
+        // Round to at most four digits after the decimal point
+        setScale(std::floor(scale * 10000 + 0.5) / 10000);
+    }
 }
 
 void Zoomable::zoomIn()

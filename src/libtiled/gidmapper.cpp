@@ -27,11 +27,21 @@
 using namespace Tiled;
 
 // Bits on the far end of the 32-bit global tile ID are used for tile flags
-const int FlippedHorizontallyFlag = 0x80000000;
-const int FlippedVerticallyFlag   = 0x40000000;
+const int FlippedHorizontallyFlag   = 0x80000000;
+const int FlippedVerticallyFlag     = 0x40000000;
+const int FlippedAntiDiagonallyFlag = 0x20000000;
 
 GidMapper::GidMapper()
 {
+}
+
+GidMapper::GidMapper(const QList<Tileset *> &tilesets)
+{
+    uint firstGid = 1;
+    foreach (Tileset *tileset, tilesets) {
+        insert(firstGid, tileset);
+        firstGid += tileset->tileCount();
+    }
 }
 
 Cell GidMapper::gidToCell(uint gid, bool &ok) const
@@ -41,9 +51,12 @@ Cell GidMapper::gidToCell(uint gid, bool &ok) const
     // Read out the flags
     result.flippedHorizontally = (gid & FlippedHorizontallyFlag);
     result.flippedVertically = (gid & FlippedVerticallyFlag);
+    result.flippedAntiDiagonally = (gid & FlippedAntiDiagonallyFlag);
 
     // Clear the flags
-    gid &= ~(FlippedHorizontallyFlag | FlippedVerticallyFlag);
+    gid &= ~(FlippedHorizontallyFlag |
+             FlippedVerticallyFlag |
+             FlippedAntiDiagonallyFlag);
 
     if (gid == 0) {
         ok = true;
@@ -53,10 +66,23 @@ Cell GidMapper::gidToCell(uint gid, bool &ok) const
         // Find the tileset containing this tile
         QMap<uint, Tileset*>::const_iterator i = mFirstGidToTileset.upperBound(gid);
         --i; // Navigate one tileset back since upper bound finds the next
-        const int tileId = gid - i.key();
+        int tileId = gid - i.key();
         const Tileset *tileset = i.value();
 
-        result.tile = tileset ? tileset->tileAt(tileId) : 0;
+        if (tileset) {
+            const int columnCount = mTilesetColumnCounts.value(tileset);
+            if (columnCount > 0 && columnCount != tileset->columnCount()) {
+                // Correct tile index for changes in image width
+                const int row = tileId / columnCount;
+                const int column = tileId % columnCount;
+                tileId = row * tileset->columnCount() + column;
+            }
+
+            result.tile = tileset->tileAt(tileId);
+        } else {
+            result.tile = 0;
+        }
+
         ok = true;
     }
 
@@ -84,6 +110,16 @@ uint GidMapper::cellToGid(const Cell &cell) const
         gid |= FlippedHorizontallyFlag;
     if (cell.flippedVertically)
         gid |= FlippedVerticallyFlag;
+    if (cell.flippedAntiDiagonally)
+        gid |= FlippedAntiDiagonallyFlag;
 
     return gid;
+}
+
+void GidMapper::setTilesetWidth(const Tileset *tileset, int width)
+{
+    if (tileset->tileWidth() == 0)
+        return;
+
+    mTilesetColumnCounts.insert(tileset, tileset->columnCountForWidth(width));
 }

@@ -1,4 +1,4 @@
-/*
+/* 
  * tilelayer.cpp
  * Copyright 2008-2011, Thorbjørn Lindeijer <thorbjorn@lindeijer.nl>
  * Copyright 2009, Jeff Bland <jksb@member.fsf.org>
@@ -67,21 +67,44 @@ QRegion TileLayer::region() const
     return region;
 }
 
+static QSize maxSize(const QSize &a,
+                     const QSize &b)
+{
+    return QSize(qMax(a.width(), b.width()),
+                 qMax(a.height(), b.height()));
+}
+
+static QMargins maxMargins(const QMargins &a,
+                           const QMargins &b)
+{
+    return QMargins(qMax(a.left(), b.left()),
+                    qMax(a.top(), b.top()),
+                    qMax(a.right(), b.right()),
+                    qMax(a.bottom(), b.bottom()));
+}
+
 void TileLayer::setCell(int x, int y, const Cell &cell)
 {
     Q_ASSERT(contains(x, y));
 
     if (cell.tile) {
-        if (cell.tile->width() > mMaxTileSize.width()) {
-            mMaxTileSize.setWidth(cell.tile->width());
-            if (mMap)
-                mMap->adjustMaxTileSize(mMaxTileSize);
-        }
-        if (cell.tile->height() > mMaxTileSize.height()) {
-            mMaxTileSize.setHeight(cell.tile->height());
-            if (mMap)
-                mMap->adjustMaxTileSize(mMaxTileSize);
-        }
+        int width = cell.tile->width();
+        int height = cell.tile->height();
+
+        if (cell.flippedAntiDiagonally)
+            std::swap(width, height);
+
+        const QPoint offset = cell.tile->tileset()->tileOffset();
+
+        mMaxTileSize = maxSize(QSize(width, height), mMaxTileSize);
+        mOffsetMargins = maxMargins(QMargins(-offset.x(),
+                                             -offset.y(),
+                                             offset.x(),
+                                             offset.y()),
+                                    mOffsetMargins);
+
+        if (mMap)
+            mMap->adjustDrawMargins(drawMargins());
     }
 
     mGrid[x + y * mWidth] = cell;
@@ -145,6 +168,8 @@ void TileLayer::flip(FlipDirection direction)
 {
     QVector<Cell> newGrid(mWidth * mHeight);
 
+    Q_ASSERT(direction == FlipHorizontally || direction == FlipVertically);
+
     for (int y = 0; y < mHeight; ++y) {
         for (int x = 0; x < mWidth; ++x) {
             Cell &dest = newGrid[x + y * mWidth];
@@ -152,7 +177,7 @@ void TileLayer::flip(FlipDirection direction)
                 const Cell &source = cellAt(mWidth - x - 1, y);
                 dest = source;
                 dest.flippedHorizontally = !source.flippedHorizontally;
-            } else {
+            } else if (direction == FlipVertically) {
                 const Cell &source = cellAt(x, mHeight - y - 1);
                 dest = source;
                 dest.flippedVertically = !source.flippedVertically;
@@ -162,6 +187,50 @@ void TileLayer::flip(FlipDirection direction)
 
     mGrid = newGrid;
 }
+
+void TileLayer::rotate(RotateDirection direction)
+{
+    static const char rotateRightMask[8] = { 5, 4, 1, 0, 7, 6, 3, 2 };
+    static const char rotateLeftMask[8]  = { 3, 2, 7, 6, 1, 0, 5, 4 };
+
+    const char (&rotateMask)[8] =
+            (direction == RotateRight) ? rotateRightMask : rotateLeftMask;
+
+    int newWidth = mHeight;
+    int newHeight = mWidth;
+    QVector<Cell> newGrid(newWidth * newHeight);
+
+    for (int y = 0; y < mHeight; ++y) {
+        for (int x = 0; x < mWidth; ++x) {
+            const Cell &source = cellAt(x, y);
+            Cell dest = source;
+
+            unsigned char mask =
+                    (dest.flippedHorizontally << 2) |
+                    (dest.flippedVertically << 1) |
+                    (dest.flippedAntiDiagonally << 0);
+
+            mask = rotateMask[mask];
+
+            dest.flippedHorizontally = (mask & 4) != 0;
+            dest.flippedVertically = (mask & 2) != 0;
+            dest.flippedAntiDiagonally = (mask & 1) != 0;
+
+            if (direction == RotateRight)
+                newGrid[x * newWidth + (mHeight - y - 1)] = dest;
+            else
+                newGrid[(mWidth - x - 1) * newWidth + y] = dest;
+        }
+    }
+
+    std::swap(mMaxTileSize.rwidth(),
+              mMaxTileSize.rheight());
+
+    mWidth = newWidth;
+    mHeight = newHeight;
+    mGrid = newGrid;
+}
+
 
 QSet<Tileset*> TileLayer::usedTilesets() const
 {
@@ -351,5 +420,6 @@ TileLayer *TileLayer::initializeClone(TileLayer *clone) const
     Layer::initializeClone(clone);
     clone->mGrid = mGrid;
     clone->mMaxTileSize = mMaxTileSize;
+    clone->mOffsetMargins = mOffsetMargins;
     return clone;
 }

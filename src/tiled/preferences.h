@@ -1,6 +1,6 @@
 /*
  * preferences.h
- * Copyright 2009-2010, Thorbjørn Lindeijer <thorbjorn@lindeijer.nl>
+ * Copyright 2009-2011, Thorbjørn Lindeijer <thorbjorn@lindeijer.nl>
  *
  * This file is part of Tiled.
  *
@@ -24,6 +24,7 @@
 #include <QObject>
 
 #include "mapwriter.h"
+#include "objecttypes.h"
 
 class QSettings;
 
@@ -44,6 +45,8 @@ public:
 
     bool showGrid() const { return mShowGrid; }
     bool snapToGrid() const { return mSnapToGrid; }
+    bool highlightCurrentLayer() const { return mHighlightCurrentLayer; }
+    bool showTilesetGrid() const { return mShowTilesetGrid; }
 
     MapWriter::LayerDataFormat layerDataFormat() const;
     void setLayerDataFormat(MapWriter::LayerDataFormat layerDataFormat);
@@ -60,6 +63,16 @@ public:
     bool useOpenGL() const { return mUseOpenGL; }
     void setUseOpenGL(bool useOpenGL);
 
+    const ObjectTypes &objectTypes() const { return mObjectTypes; }
+    void setObjectTypes(const ObjectTypes &objectTypes);
+
+    enum FileType {
+        ObjectTypesFile
+    };
+
+    QString lastPath(FileType fileType) const;
+    void setLastPath(FileType fileType, const QString &path);
+
     /**
      * Provides access to the QSettings instance to allow storing/retrieving
      * arbitrary values. The naming style for groups and keys is CamelCase.
@@ -69,12 +82,18 @@ public:
 public slots:
     void setShowGrid(bool showGrid);
     void setSnapToGrid(bool snapToGrid);
+    void setHighlightCurrentLayer(bool highlight);
+    void setShowTilesetGrid(bool showTilesetGrid);
 
 signals:
     void showGridChanged(bool showGrid);
     void snapToGridChanged(bool snapToGrid);
+    void highlightCurrentLayerChanged(bool highlight);
+    void showTilesetGridChanged(bool showTilesetGrid);
 
     void useOpenGLChanged(bool useOpenGL);
+
+    void objectTypesChanged();
 
 private:
     Preferences();
@@ -84,12 +103,15 @@ private:
 
     bool mShowGrid;
     bool mSnapToGrid;
+    bool mHighlightCurrentLayer;
+    bool mShowTilesetGrid;
 
     MapWriter::LayerDataFormat mLayerDataFormat;
     bool mDtdEnabled;
     QString mLanguage;
     bool mReloadTilesetsOnChange;
     bool mUseOpenGL;
+    ObjectTypes mObjectTypes;
 
     static Preferences *mInstance;
 };

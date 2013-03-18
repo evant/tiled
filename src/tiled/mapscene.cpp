@@ -1,6 +1,6 @@
 /*
  * mapscene.cpp
- * Copyright 2008-2010, Thorbjørn Lindeijer <thorbjorn@lindeijer.nl>
+ * Copyright 2008-2011, Thorbjørn Lindeijer <thorbjorn@lindeijer.nl>
  * Copyright 2008, Roderic Morris <roderic@ccs.neu.edu>
  * Copyright 2009, Edward Hutchins <eah1@yahoo.com>
  * Copyright 2010, Jeff Bland <jksb@member.fsf.org>
@@ -31,6 +31,7 @@
 #include "maprenderer.h"
 #include "objectgroup.h"
 #include "objectgroupitem.h"
+#include "preferences.h"
 #include "tilelayer.h"
 #include "tilelayeritem.h"
 #include "tileselectionitem.h"
@@ -47,21 +48,36 @@
 using namespace Tiled;
 using namespace Tiled::Internal;
 
+static const qreal darkeningFactor = 0.6;
+static const qreal opacityFactor = 0.4;
+
 MapScene::MapScene(QObject *parent):
     QGraphicsScene(parent),
     mMapDocument(0),
-    mSelectedObjectGroupItem(0),
     mSelectedTool(0),
     mActiveTool(0),
     mGridVisible(true),
     mUnderMouse(false),
-    mCurrentModifiers(Qt::NoModifier)
+    mCurrentModifiers(Qt::NoModifier),
+    mDarkRectangle(new QGraphicsRectItem)
 {
     setBackgroundBrush(Qt::darkGray);
 
     TilesetManager *tilesetManager = TilesetManager::instance();
     connect(tilesetManager, SIGNAL(tilesetChanged(Tileset*)),
             this, SLOT(tilesetChanged(Tileset*)));
+
+    Preferences *prefs = Preferences::instance();
+    connect(prefs, SIGNAL(objectTypesChanged()), SLOT(syncAllObjectItems()));
+    connect(prefs, SIGNAL(highlightCurrentLayerChanged(bool)),
+            SLOT(setHighlightCurrentLayer(bool)));
+
+    mDarkRectangle->setPen(Qt::NoPen);
+    mDarkRectangle->setBrush(Qt::black);
+    mDarkRectangle->setOpacity(darkeningFactor);
+    addItem(mDarkRectangle);
+
+    mHighlightCurrentLayer = prefs->highlightCurrentLayer();
 
     // Install an event filter so that we can get key events on behalf of the
     // active tool without having to have the current focus.
@@ -113,7 +129,7 @@ void MapScene::setSelectedObjectItems(const QSet<MapObjectItem *> &items)
 #if QT_VERSION >= 0x040700
     selectedObjects.reserve(items.size());
 #endif
-    foreach (MapObjectItem *item, items)
+    foreach (const MapObjectItem *item, items)
         selectedObjects.append(item->mapObject());
     mMapDocument->setSelectedObjects(selectedObjects);
 }
@@ -125,11 +141,12 @@ void MapScene::setSelectedTool(AbstractTool *tool)
 
 void MapScene::refreshScene()
 {
-    mSelectedObjectGroupItem = 0;
     mLayerItems.clear();
     mObjectItems.clear();
 
+    removeItem(mDarkRectangle);
     clear();
+    addItem(mDarkRectangle);
 
     if (!mMapDocument) {
         setSceneRect(QRectF());
@@ -138,6 +155,7 @@ void MapScene::refreshScene()
 
     const QSize mapSize = mMapDocument->renderer()->mapSize();
     setSceneRect(0, 0, mapSize.width(), mapSize.height());
+    mDarkRectangle->setRect(0, 0, mapSize.width(), mapSize.height());
 
     const Map *map = mMapDocument->map();
     mLayerItems.resize(map->layerCount());
@@ -154,6 +172,8 @@ void MapScene::refreshScene()
     TileSelectionItem *selectionItem = new TileSelectionItem(mMapDocument);
     selectionItem->setZValue(10000 - 1);
     addItem(selectionItem);
+
+    updateCurrentLayerHighlight();
 }
 
 QGraphicsItem *MapScene::createLayerItem(Layer *layer)
@@ -178,35 +198,48 @@ QGraphicsItem *MapScene::createLayerItem(Layer *layer)
     return layerItem;
 }
 
+void MapScene::updateCurrentLayerHighlight()
+{
+    if (!mMapDocument)
+        return;
+
+    const int currentLayerIndex = mMapDocument->currentLayerIndex();
+
+    if (!mHighlightCurrentLayer || currentLayerIndex == -1) {
+        mDarkRectangle->setVisible(false);
+
+        // Restore opacity for all layers
+        for (int i = 0; i < mLayerItems.size(); ++i) {
+            const Layer *layer = mMapDocument->map()->layerAt(i);
+            mLayerItems.at(i)->setOpacity(layer->opacity());
+        }
+
+        return;
+    }
+
+    // Darken layers below the current layer
+    mDarkRectangle->setZValue(currentLayerIndex - 0.5);
+    mDarkRectangle->setVisible(true);
+
+    // Set layers above the current layer to half opacity
+    for (int i = 1; i < mLayerItems.size(); ++i) {
+        const Layer *layer = mMapDocument->map()->layerAt(i);
+        const qreal multiplier = (currentLayerIndex < i) ? opacityFactor : 1;
+        mLayerItems.at(i)->setOpacity(layer->opacity() * multiplier);
+    }
+}
+
 void MapScene::repaintRegion(const QRegion &region)
 {
     const MapRenderer *renderer = mMapDocument->renderer();
-    const QSize extra = mMapDocument->map()->extraTileSize();
+    const QMargins margins = mMapDocument->map()->drawMargins();
 
-    foreach (const QRect &r, region.rects())
-        update(renderer->boundingRect(r)
-               .adjusted(0, -extra.height(), extra.width(), 0));
-}
-
-/**
- * Adapts the scene to the currently selected layer. If an object group is
- * selected, it makes sure the objects in the group are movable.
- */
-void MapScene::updateInteractionMode()
-{
-    ObjectGroupItem *ogItem = 0;
-
-    const int index = mMapDocument->currentLayerIndex();
-    if (index != -1) {
-        Layer *layer = mMapDocument->map()->layerAt(index);
-        if (layer->isVisible() && dynamic_cast<ObjectGroup*>(layer))
-            ogItem = static_cast<ObjectGroupItem*>(mLayerItems.at(index));
+    foreach (const QRect &r, region.rects()) {
+        update(renderer->boundingRect(r).adjusted(-margins.left(),
+                                                  -margins.top(),
+                                                  margins.right(),
+                                                  margins.bottom()));
     }
-
-    if (mSelectedObjectGroupItem == ogItem)
-        return;
-
-    mSelectedObjectGroupItem = ogItem;
 }
 
 void MapScene::enableSelectedTool()
@@ -240,7 +273,7 @@ void MapScene::disableSelectedTool()
 
 void MapScene::currentLayerIndexChanged()
 {
-    updateInteractionMode();
+    updateCurrentLayerHighlight();
 }
 
 /**
@@ -250,6 +283,7 @@ void MapScene::mapChanged()
 {
     const QSize mapSize = mMapDocument->renderer()->mapSize();
     setSceneRect(0, 0, mapSize.width(), mapSize.height());
+    mDarkRectangle->setRect(0, 0, mapSize.width(), mapSize.height());
 
     foreach (QGraphicsItem *item, mLayerItems) {
         if (TileLayerItem *tli = dynamic_cast<TileLayerItem*>(item))
@@ -280,11 +314,7 @@ void MapScene::layerAdded(int index)
 
 void MapScene::layerRemoved(int index)
 {
-    QGraphicsItem *layerItem = mLayerItems.at(index);
-    if (layerItem == mSelectedObjectGroupItem)
-        mSelectedObjectGroupItem = 0;
-
-    delete layerItem;
+    delete mLayerItems.at(index);
     mLayerItems.remove(index);
 }
 
@@ -297,12 +327,13 @@ void MapScene::layerChanged(int index)
     const Layer *layer = mMapDocument->map()->layerAt(index);
     QGraphicsItem *layerItem = mLayerItems.at(index);
 
-    if (layer->isVisible() != layerItem->isVisible()) {
-        layerItem->setVisible(layer->isVisible());
-        updateInteractionMode();
-    }
-    if (layer->opacity() != layerItem->opacity())
-        layerItem->setOpacity(layer->opacity());
+    layerItem->setVisible(layer->isVisible());
+
+    qreal multiplier = 1;
+    if (mHighlightCurrentLayer && mMapDocument->currentLayerIndex() < index)
+        multiplier = opacityFactor;
+
+    layerItem->setOpacity(layer->opacity() * multiplier);
 }
 
 /**
@@ -350,8 +381,8 @@ void MapScene::objectsRemoved(const QList<MapObject*> &objects)
  */
 void MapScene::objectsChanged(const QList<MapObject*> &objects)
 {
-    foreach (MapObject *o, objects) {
-        MapObjectItem *item = mObjectItems.value(o);
+    foreach (MapObject *object, objects) {
+        MapObjectItem *item = itemForObject(object);
         Q_ASSERT(item);
 
         item->syncWithMapObject();
@@ -364,7 +395,7 @@ void MapScene::updateSelectedObjectItems()
 
     QSet<MapObjectItem*> items;
     foreach (MapObject *object, objects) {
-        MapObjectItem *item = mObjectItems.value(object);
+        MapObjectItem *item = itemForObject(object);
         Q_ASSERT(item);
 
         items.insert(item);
@@ -377,6 +408,13 @@ void MapScene::updateSelectedObjectItems()
         item->setEditable(true);
 
     mSelectedObjectItems = items;
+    emit selectedObjectItemsChanged();
+}
+
+void MapScene::syncAllObjectItems()
+{
+    foreach (MapObjectItem *item, mObjectItems)
+        item->syncWithMapObject();
 }
 
 void MapScene::setGridVisible(bool visible)
@@ -386,6 +424,15 @@ void MapScene::setGridVisible(bool visible)
 
     mGridVisible = visible;
     update();
+}
+
+void MapScene::setHighlightCurrentLayer(bool highlightCurrentLayer)
+{
+    if (mHighlightCurrentLayer == highlightCurrentLayer)
+        return;
+
+    mHighlightCurrentLayer = highlightCurrentLayer;
+    updateCurrentLayerHighlight();
 }
 
 void MapScene::drawForeground(QPainter *painter, const QRectF &rect)

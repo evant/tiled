@@ -3,7 +3,7 @@
  * Copyright 2008-2010, Thorbjørn Lindeijer <thorbjorn@lindeijer.nl>
  * Copyright 2008, Roderic Morris <roderic@ccs.neu.edu>
  * Copyright 2009-2010, Jeff Bland <jksb@member.fsf.org>
- * Copyright 2010, Stefan Beller <stefanbeller@googlemail.com>
+ * Copyright 2010-2011, Stefan Beller <stefanbeller@googlemail.com>
  *
  * This file is part of Tiled.
  *
@@ -31,6 +31,7 @@
 #include <QSettings>
 
 class QLabel;
+class QToolButton;
 
 namespace Ui {
 class MainWindow;
@@ -113,6 +114,7 @@ public slots:
     void cut();
     void copy();
     void paste();
+    void delete_(); // delete is a reserved word
     void openPreferences();
 
     void zoomIn();
@@ -138,6 +140,8 @@ public slots:
 
     void flipStampHorizontally();
     void flipStampVertically();
+    void rotateStampLeft();
+    void rotateStampRight();
 
     void setStampBrush(const TileLayer *tiles);
     void updateStatusInfoLabel(const QString &statusInfo);
@@ -145,6 +149,8 @@ public slots:
     void mapDocumentChanged(MapDocument *mapDocument);
     void closeMapDocument(int index);
 
+    void autoMappingError();
+    void autoMappingWarning();
 private:
     /**
       * Asks the user whether the current map should be saved when necessary.
@@ -198,6 +204,7 @@ private:
     QLabel *mZoomLabel;
     QLabel *mStatusInfoLabel;
     QSettings mSettings;
+    QToolButton *mRandomButton;
     CommandButton *mCommandButton;
 
     StampBrush *mStampBrush;
