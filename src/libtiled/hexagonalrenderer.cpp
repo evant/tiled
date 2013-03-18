@@ -99,7 +99,7 @@ void HexagonalRenderer::drawTileLayer(QPainter *painter,
         for (int x = startX; x < endX; ++x) {
 
             // Compensate for the layer position
-            const Cell &cell = layer->cellAt(x - layer->pos().x(), y - layer->pos().y());
+            const Cell &cell = layer->cellAt(x - layer->x(), y - layer->y());
             if (cell.isEmpty())
                 continue;
 
@@ -171,7 +171,7 @@ QRectF HexagonalRenderer::tileRectToBoundingPixelRect(QRectF rect) const
     for (int i=0; i<rect.height(); ++i) {
         for (int j=0; j<rect.width(); ++j) {
             QPolygonF hexagon = createHexagonForTile(rect.x()+j, rect.y()+i);
-            united = united.unite(hexagon.boundingRect());
+            united = united.united(hexagon.boundingRect());
         }
     }
     return united;
